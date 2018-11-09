@@ -1,0 +1,14 @@
+{
+  "name": "rocketmq",
+  "version": "1.0.0",
+  "description": "RocketMQ binding for Node.js",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "XadillaX <i@2333.moe>",
+  "license": "MIT",
+  "dependencies": {
+    "nan": "^2.11.1"
+  }
+}
