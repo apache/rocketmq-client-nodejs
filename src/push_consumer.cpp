@@ -64,7 +64,7 @@ void RocketMQPushConsumer::SetOptions(Local<Object> options)
         int thread_count = Nan::To<int32_t>(_thread_count_v).FromJust();
         if(thread_count > 0)
         {
-            SetPushConsumeThreadCount(consumer_ptr, thread_count);
+            SetPushConsumerThreadCount(consumer_ptr, thread_count);
         }
     }
 
@@ -75,7 +75,7 @@ void RocketMQPushConsumer::SetOptions(Local<Object> options)
         int max_batch_size = Nan::To<int32_t>(_max_batch_size_v).FromJust();
         if(max_batch_size > 0)
         {
-            SetPushConsumeMessageBatchMaxSize(consumer_ptr, max_batch_size);
+            SetPushConsumerMessageBatchMaxSize(consumer_ptr, max_batch_size);
         }
     }
 }

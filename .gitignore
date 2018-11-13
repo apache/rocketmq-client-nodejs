@@ -184,3 +184,4 @@ $RECYCLE.BIN/
 # End of https://www.gitignore.io/api/c++,node,linux,macos,windows
 
 build
+package-lock.json

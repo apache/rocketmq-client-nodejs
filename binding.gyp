@@ -16,7 +16,7 @@
       "conditions": [
         ["OS==\"linux\"", {
           "libraries": [
-            "../deps/rocketmq/lib/librocketmq.so"
+            "../deps/rocketmq/lib/librocketmq.a"
           ],
           "cflags_cc!": [ "-fno-exceptions", "-pthread", "-Wl,--no-as-needed", "-ldl" ],
           "cflags_cc": [ "-Wno-ignored-qualifiers" ],
