@@ -16,11 +16,22 @@
       "conditions": [
         ["OS==\"linux\"", {
           "libraries": [
-            "../deps/rocketmq/lib/librocketmq.a"
+            "<(module_root_dir)/deps/rocketmq/lib/librocketmq.a"
           ],
           "cflags_cc!": [ "-fno-exceptions", "-pthread", "-Wl,--no-as-needed", "-ldl" ],
           "cflags_cc": [ "-Wno-ignored-qualifiers" ],
           "cflags": [ "-std=c++11", "-g" ]
+        }],
+        ["OS==\"win\"", {
+          "libraries": [
+            "<(module_root_dir)/deps/rocketmq/lib/rocketmq-client-cpp.lib"
+          ],
+          "copies": [
+            {
+              "destination": "<(module_root_dir)/build/Release/",
+              "files": [ "<(module_root_dir)/deps/rocketmq/lib/rocketmq-client-cpp.dll" ]
+            }
+          ]
         }]
       ]
     }
