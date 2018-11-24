@@ -1,0 +1,3 @@
+[submodule "deps/rocketmq"]
+path = deps/rocketmq
+url = https://github.com/apache/rocketmq-client-cpp.git

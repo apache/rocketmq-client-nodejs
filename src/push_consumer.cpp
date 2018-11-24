@@ -248,6 +248,7 @@ void RocketMQPushConsumer::HandleMessageInEventLoop(uv_async_t* async)
 
 int RocketMQPushConsumer::OnMessage(CPushConsumer* consumer_ptr, CMessageExt* msg_ext)
 {
+    printf("!!!!!\n");
     RocketMQPushConsumer* consumer = _push_consumer_map[consumer_ptr];
     if (!consumer)
     {
