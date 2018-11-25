@@ -197,6 +197,11 @@ NAN_METHOD(RocketMQPushConsumer::SetListener)
     consumer->listener_func.Reset(Nan::To<Function>(info[0]).ToLocalChecked());
 }
 
+void close_async_done(uv_handle_t* handle)
+{
+    free(handle);
+}
+
 void RocketMQPushConsumer::HandleMessageInEventLoop(uv_async_t* async)
 {
     Nan::HandleScope scope;
@@ -225,6 +230,7 @@ void RocketMQPushConsumer::HandleMessageInEventLoop(uv_async_t* async)
     //   const char *GetMessageId(CMessageExt *msgExt);
     Local<Object> result = Nan::New<Object>();
     char keys[5][8] = { "topic", "tags", "keys", "body", "id" };
+
     const char* values[5] = {
         GetMessageTopic(msg), GetMessageTags(msg), GetMessageKeys(msg),
         GetMessageBody(msg), GetMessageId(msg)
@@ -244,11 +250,12 @@ void RocketMQPushConsumer::HandleMessageInEventLoop(uv_async_t* async)
     };
     Nan::Callback* callback = consumer->GetListenerFunction();
     callback->Call(2, argv);
+
+    uv_close((uv_handle_t*)async, close_async_done);
 }
 
 int RocketMQPushConsumer::OnMessage(CPushConsumer* consumer_ptr, CMessageExt* msg_ext)
 {
-    printf("!!!!!\n");
     RocketMQPushConsumer* consumer = _push_consumer_map[consumer_ptr];
     if (!consumer)
     {
@@ -256,34 +263,24 @@ int RocketMQPushConsumer::OnMessage(CPushConsumer* consumer_ptr, CMessageExt* ms
         return CConsumeStatus::E_RECONSUME_LATER;
     }
 
-    ConsumerAckInner* ack_inner = new ConsumerAckInner();
+    ConsumerAckInner ack_inner;
+
+    // create async parameter
+    MessageHandlerParam param;
+    param.consumer = consumer;
+    param.msg = msg_ext;
+    param.ack = &ack_inner;
 
     // create a new async handler and bind with `RocketMQPushConsumer::HandleMessageInEventLoop`
     uv_async_t* async = (uv_async_t*)malloc(sizeof(uv_async_t));
     uv_async_init(uv_default_loop(), async, RocketMQPushConsumer::HandleMessageInEventLoop);
-
-    // create async parameter
-    MessageHandlerParam* param = (MessageHandlerParam*)malloc(sizeof(MessageHandlerParam));
-    param->consumer = consumer;
-    param->msg = msg_ext;
-    param->ack = ack_inner;
-    async->data = (void*)param;
+    async->data = (void*)&param;
 
     // send async handler
     uv_async_send(async);
 
     // wait for result
-    CConsumeStatus status = ack_inner->WaitResult();
-
-    param->consumer = NULL;
-    param->msg = NULL;
-    param->ack = NULL;
-    async->data = NULL;
-
-    delete ack_inner;
-    free(param);
-    free(async);
-
+    CConsumeStatus status = ack_inner.WaitResult();
     return status;
 }
 
