@@ -1,15 +1,17 @@
 #include <map>
 #include "push_consumer.h"
 #include "consumer_ack.h"
+#include "workers/push_consumer/start_or_shutdown.h"
 
 namespace __node_rocketmq__ {
 
 struct MessageHandlerParam
 {
     RocketMQPushConsumer* consumer;
-    CMessageExt* msg;
     ConsumerAckInner* ack;
+    const char* values[5];
 };
+char message_handler_param_keys[5][8] = { "topic", "tags", "keys", "body", "id" };
 
 map<CPushConsumer*, RocketMQPushConsumer*> _push_consumer_map;
 
@@ -133,36 +135,22 @@ NAN_METHOD(RocketMQPushConsumer::Start)
 {
     NAN_GET_CPUSHCONSUMER();
 
-    int ret;
-    try
-    {
-        ret = StartPushConsumer(consumer_ptr);
-    }
-    catch (runtime_error e)
-    {
-        Nan::ThrowError(e.what());
-        return;
-    }
+    Nan::Callback* callback = (info[0]->IsFunction()) ?
+        new Nan::Callback(Nan::To<Function>(info[0]).ToLocalChecked()) :
+        NULL;
 
-    info.GetReturnValue().Set(ret);
+    Nan::AsyncQueueWorker(new PushConsumerStartOrShutdownWorker(callback, consumer_ptr, PushConsumerWorkerType::START_PUSH_CONSUMER));
 }
 
 NAN_METHOD(RocketMQPushConsumer::Shutdown)
 {
     NAN_GET_CPUSHCONSUMER();
 
-    int ret;
-    try
-    {
-        ret = ShutdownPushConsumer(consumer_ptr);
-    }
-    catch (runtime_error e)
-    {
-        Nan::ThrowError(e.what());
-        return;
-    }
+    Nan::Callback* callback = (info[0]->IsFunction()) ?
+        new Nan::Callback(Nan::To<Function>(info[0]).ToLocalChecked()) :
+        NULL;
 
-    info.GetReturnValue().Set(ret);
+    Nan::AsyncQueueWorker(new PushConsumerStartOrShutdownWorker(callback, consumer_ptr, PushConsumerWorkerType::SHUTDOWN_PUSH_CONSUMER));
 }
 
 NAN_METHOD(RocketMQPushConsumer::Subscribe)
@@ -209,8 +197,7 @@ void RocketMQPushConsumer::HandleMessageInEventLoop(uv_async_t* async)
     Isolate* isolate = Isolate::GetCurrent();
     Local<Context> context = isolate->GetCurrentContext();
 
-    MessageHandlerParam* param = (MessageHandlerParam*)async->data;
-    CMessageExt* msg = param->msg;
+    MessageHandlerParam* param = (MessageHandlerParam*)(async->data);
     RocketMQPushConsumer* consumer = param->consumer;
     ConsumerAckInner* ack_inner = param->ack;
 
@@ -220,28 +207,13 @@ void RocketMQPushConsumer::HandleMessageInEventLoop(uv_async_t* async)
     ConsumerAck* ack = ObjectWrap::Unwrap<ConsumerAck>(ack_obj);
     ack->SetInner(ack_inner);
 
-    // create message object:
-    //
-    //   const char *GetMessageTopic(CMessageExt *msgExt);
-    //   const char *GetMessageTags(CMessageExt *msgExt);
-    //   const char *GetMessageKeys(CMessageExt *msgExt);
-    //   const char *GetMessageBody(CMessageExt *msgExt);
-    //   const char *GetMessageProperty(CMessageExt *msgExt, const char *key);
-    //   const char *GetMessageId(CMessageExt *msgExt);
     Local<Object> result = Nan::New<Object>();
-    char keys[5][8] = { "topic", "tags", "keys", "body", "id" };
-
-    const char* values[5] = {
-        GetMessageTopic(msg), GetMessageTags(msg), GetMessageKeys(msg),
-        GetMessageBody(msg), GetMessageId(msg)
-    };
-
     for(int i = 0; i < 5; i++)
     {
         Nan::Set(
             result,
-            Nan::New(keys[i]).ToLocalChecked(),
-            Nan::New(values[i]).ToLocalChecked());
+            Nan::New(message_handler_param_keys[i]).ToLocalChecked(),
+            Nan::New(param->values[i]).ToLocalChecked());
     }
 
     Local<Value> argv[2] = {
@@ -268,19 +240,27 @@ int RocketMQPushConsumer::OnMessage(CPushConsumer* consumer_ptr, CMessageExt* ms
     // create async parameter
     MessageHandlerParam param;
     param.consumer = consumer;
-    param.msg = msg_ext;
     param.ack = &ack_inner;
+
+    // set message values
+    // TODO: const char *GetMessageProperty(CMessageExt *msgExt, const char *key);
+    param.values[0] = GetMessageTopic(msg_ext);
+    param.values[1] = GetMessageTags(msg_ext);
+    param.values[2] = GetMessageKeys(msg_ext);
+    param.values[3] = GetMessageBody(msg_ext);
+    param.values[4] = GetMessageId(msg_ext);
 
     // create a new async handler and bind with `RocketMQPushConsumer::HandleMessageInEventLoop`
     uv_async_t* async = (uv_async_t*)malloc(sizeof(uv_async_t));
     uv_async_init(uv_default_loop(), async, RocketMQPushConsumer::HandleMessageInEventLoop);
-    async->data = (void*)&param;
+    async->data = (void*)(&param);
 
     // send async handler
     uv_async_send(async);
 
     // wait for result
     CConsumeStatus status = ack_inner.WaitResult();
+
     return status;
 }
 

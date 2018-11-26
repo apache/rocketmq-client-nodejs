@@ -1,13 +1,19 @@
+const co = require("co");
+
 const PushConsumer = require("../lib/push_consumer");
-process.stdin.resume();
 
-const consumer = new PushConsumer("producerName", {
-    nameServer: "127.0.0.1:9876"
-});
-consumer.subscribe("test");
-consumer.on("message", function(msg, ack) {
-    console.log(msg, ack, "<<<");
-    ack.done();
-});
+co(async () => {
+    const consumer = new PushConsumer("testGroup", {
+        nameServer: "127.0.0.1:9876"
+    });
 
-consumer.start();
+    consumer.subscribe("test", "*");
+    consumer.on("message", function(msg, ack) {
+        console.log(msg);
+        ack.done();
+    });
+
+    console.time("consumer start");
+    await consumer.start();
+    console.timeEnd("consumer start");
+});

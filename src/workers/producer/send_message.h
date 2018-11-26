@@ -2,19 +2,20 @@
 #define __ROCKETMQ_SEND_MESSAGE_H__
 
 #include <nan.h>
+#include <CProducer.h>
 
 namespace __node_rocketmq__ {
 
-class SendMessageWorker : public Nan::AsyncWorker {
+class ProducerSendMessageWorker : public Nan::AsyncWorker {
 public:
-    SendMessageWorker(Nan::Callback* callback, RocketMQProducer* producer, CMessage* msg) :
+    ProducerSendMessageWorker(Nan::Callback* callback, RocketMQProducer* producer, CMessage* msg) :
         AsyncWorker(callback),
         msg(msg),
         producer(producer)
     {
     }
 
-    ~SendMessageWorker()
+    ~ProducerSendMessageWorker()
     {
         DestroyMessage(msg);
     }

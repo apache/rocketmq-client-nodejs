@@ -1,5 +1,6 @@
 #include "producer.h"
-#include "workers/send_message.h"
+#include "workers/producer/send_message.h"
+#include "workers/producer/start_or_shutdown.h"
 
 namespace __node_rocketmq__ {
 
@@ -91,36 +92,22 @@ NAN_METHOD(RocketMQProducer::Start)
 {
     NAN_GET_CPRODUCER();
 
-    int ret;
-    try
-    {
-        ret = StartProducer(producer_ptr);
-    }
-    catch (runtime_error e)
-    {
-        Nan::ThrowError(e.what());
-        return;
-    }
+    Nan::Callback* callback = (info[0]->IsFunction()) ?
+        new Nan::Callback(Nan::To<Function>(info[0]).ToLocalChecked()) :
+        NULL;
 
-    info.GetReturnValue().Set(ret);
+    Nan::AsyncQueueWorker(new ProducerStartOrShutdownWorker(callback, producer_ptr, ProducerWorkerType::START_PRODUCER));
 }
 
 NAN_METHOD(RocketMQProducer::Shutdown)
 {
     NAN_GET_CPRODUCER();
 
-    int ret;
-    try
-    {
-        ret = ShutdownProducer(producer_ptr);
-    }
-    catch (runtime_error e)
-    {
-        Nan::ThrowError(e.what());
-        return;
-    }
+    Nan::Callback* callback = (info[0]->IsFunction()) ?
+        new Nan::Callback(Nan::To<Function>(info[0]).ToLocalChecked()) :
+        NULL;
 
-    info.GetReturnValue().Set(ret);
+    Nan::AsyncQueueWorker(new ProducerStartOrShutdownWorker(callback, producer_ptr, ProducerWorkerType::SHUTDOWN_PRODUCER));
 }
 
 NAN_METHOD(RocketMQProducer::Send)
@@ -166,7 +153,7 @@ NAN_METHOD(RocketMQProducer::Send)
         NULL;
 
     RocketMQProducer* producer = ObjectWrap::Unwrap<RocketMQProducer>(info.Holder());
-    Nan::AsyncQueueWorker(new SendMessageWorker(callback, producer, msg));
+    Nan::AsyncQueueWorker(new ProducerSendMessageWorker(callback, producer, msg));
 }
 
 }

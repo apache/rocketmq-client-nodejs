@@ -185,3 +185,4 @@ $RECYCLE.BIN/
 
 build
 package-lock.json
+.vscode
