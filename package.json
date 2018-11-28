@@ -4,7 +4,8 @@
   "description": "RocketMQ binding for Node.js",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npm run lint && echo 'no test yet'",
+    "lint": "eslint ."
   },
   "author": "XadillaX <i@2333.moe>",
   "license": "MIT",
@@ -12,6 +13,8 @@
     "nan": "^2.11.1"
   },
   "devDependencies": {
-    "co": "^4.6.0"
+    "co": "^4.6.0",
+    "eslint": "^5.9.0",
+    "eslint-config-rocketmq-style": "^1.0.0"
   }
 }

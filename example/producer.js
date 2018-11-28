@@ -1,3 +1,5 @@
+"use strict";
+
 const co = require("co");
 
 const Producer = require("../lib/producer");
@@ -10,7 +12,7 @@ co(async () => {
     console.time("producer start");
     await producer.start();
     console.timeEnd("producer start");
-    for (let i = 0; i < 15; i++) {
+    for(let i = 0; i < 15; i++) {
         console.time(`send ${i}`);
         const ret = await producer.send("test", "baz", {
             keys: "foo",
