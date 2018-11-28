@@ -3,8 +3,11 @@
 
 #include <nan.h>
 #include <CPushConsumer.h>
+#include <MQClientException.h>
 
 namespace __node_rocketmq__ {
+
+using namespace std;
 
 enum PushConsumerWorkerType {
     START_PUSH_CONSUMER = 0,
@@ -42,6 +45,10 @@ public:
             SetErrorMessage(e.what());
         }
         catch(exception& e)
+        {
+            SetErrorMessage(e.what());
+        }
+        catch(rocketmq::MQException& e)
         {
             SetErrorMessage(e.what());
         }

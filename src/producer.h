@@ -4,9 +4,6 @@
 #include <CProducer.h>
 #include <nan.h>
 
-#include <string>
-using namespace std;
-
 namespace __node_rocketmq__ {
 
 using v8::Context;
@@ -26,13 +23,14 @@ public:
     CProducer* GetProducer() { return producer_ptr; }
 
 private:
-    explicit RocketMQProducer(string group_id);
+    explicit RocketMQProducer(const char* group_id, const char* instance_name);
     ~RocketMQProducer();
 
     static NAN_METHOD(New);
     static NAN_METHOD(Start);
     static NAN_METHOD(Shutdown);
     static NAN_METHOD(Send);
+    static NAN_METHOD(SetSessionCredentials);
 
     static Nan::Persistent<Function> constructor;
 

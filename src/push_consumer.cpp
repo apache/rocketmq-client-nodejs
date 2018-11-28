@@ -3,6 +3,10 @@
 #include "consumer_ack.h"
 #include "workers/push_consumer/start_or_shutdown.h"
 
+#include <queue>
+#include <string>
+using namespace std;
+
 namespace __node_rocketmq__ {
 
 struct MessageHandlerParam
@@ -21,9 +25,15 @@ map<CPushConsumer*, RocketMQPushConsumer*> _push_consumer_map;
 
 Nan::Persistent<Function> RocketMQPushConsumer::constructor;
 
-RocketMQPushConsumer::RocketMQPushConsumer(string group_id)
+RocketMQPushConsumer::RocketMQPushConsumer(const char* group_id, const char* instance_name)
 {
-    consumer_ptr = CreatePushConsumer(group_id.c_str());
+    consumer_ptr = CreatePushConsumer(group_id);
+
+    if(instance_name)
+    {
+        SetPushConsumerInstanceName(consumer_ptr, instance_name);
+    }
+
     _push_consumer_map[consumer_ptr] = this;
 
     RegisterMessageCallback(consumer_ptr, RocketMQPushConsumer::OnMessage);
@@ -92,6 +102,7 @@ NAN_MODULE_INIT(RocketMQPushConsumer::Init)
     Nan::SetPrototypeMethod(tpl, "shutdown", Shutdown);
     Nan::SetPrototypeMethod(tpl, "subscribe", Subscribe);
     Nan::SetPrototypeMethod(tpl, "setListener", SetListener);
+    Nan::SetPrototypeMethod(tpl, "setSessionCredentials", SetSessionCredentials);
 
     constructor.Reset(tpl->GetFunction());
     Nan::Set(target, Nan::New("PushConsumer").ToLocalChecked(), tpl->GetFunction());
@@ -104,16 +115,17 @@ NAN_METHOD(RocketMQPushConsumer::New)
 
     if(!info.IsConstructCall())
     {
-        const int argc = 2;
-        Local<Value> argv[argc] = { info[0], info[1] };
+        const int argc = 3;
+        Local<Value> argv[argc] = { info[0], info[1], info[2] };
         Local<Function> _constructor = Nan::New<v8::Function>(constructor);
         info.GetReturnValue().Set(_constructor->NewInstance(context, argc, argv).ToLocalChecked());
         return;
     }
 
     Nan::Utf8String group_id(info[0]);
-    Local<Object> options = Nan::To<Object>(info[1]).ToLocalChecked();
-    RocketMQPushConsumer* consumer = new RocketMQPushConsumer(*group_id);
+    Nan::Utf8String instance_name(info[1]);
+    Local<Object> options = Nan::To<Object>(info[2]).ToLocalChecked();
+    RocketMQPushConsumer* consumer = new RocketMQPushConsumer(*group_id, info[1]->IsNull() ? NULL : *instance_name);
 
     consumer->Wrap(info.This());
 
@@ -183,6 +195,34 @@ NAN_METHOD(RocketMQPushConsumer::SetListener)
     }
 
     consumer->listener_func.Reset(Nan::To<Function>(info[0]).ToLocalChecked());
+}
+
+NAN_METHOD(RocketMQPushConsumer::SetSessionCredentials)
+{
+    NAN_GET_CPUSHCONSUMER();
+
+    Nan::Utf8String access_key(info[0]);
+    Nan::Utf8String secret_key(info[1]);
+    Nan::Utf8String ons_channel(info[2]);
+
+    int ret;
+    try
+    {
+        ret = SetPushConsumerSessionCredentials(consumer_ptr, *access_key, *secret_key, *ons_channel);
+    }
+    catch(runtime_error e)
+    {
+        Nan::ThrowError(e.what());
+    }
+    catch(std::exception& e)
+    {
+        Nan::ThrowError(e.what());
+    }
+    catch(rocketmq::MQException& e)
+    {
+        Nan::ThrowError(e.what());
+    }
+    info.GetReturnValue().Set(ret);
 }
 
 void close_async_done(uv_handle_t* handle)

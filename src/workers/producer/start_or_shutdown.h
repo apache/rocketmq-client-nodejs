@@ -3,8 +3,11 @@
 
 #include <nan.h>
 #include <CProducer.h>
+#include <MQClientException.h>
 
 namespace __node_rocketmq__ {
+
+using namespace std;
 
 enum ProducerWorkerType {
     START_PRODUCER = 0,
@@ -42,6 +45,10 @@ public:
             SetErrorMessage(e.what());
         }
         catch(exception& e)
+        {
+            SetErrorMessage(e.what());
+        }
+        catch(rocketmq::MQException& e)
         {
             SetErrorMessage(e.what());
         }

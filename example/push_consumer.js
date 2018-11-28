@@ -6,6 +6,7 @@ co(async () => {
     const consumer = new PushConsumer("testGroup", {
         nameServer: "127.0.0.1:9876"
     });
+    consumer.setSessionCredentials("*", "*", "*");
 
     consumer.subscribe("test", "*");
     consumer.on("message", function(msg, ack) {

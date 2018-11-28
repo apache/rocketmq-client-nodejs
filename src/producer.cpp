@@ -2,6 +2,10 @@
 #include "workers/producer/send_message.h"
 #include "workers/producer/start_or_shutdown.h"
 
+#include <MQClientException.h>
+#include <string>
+using namespace std;
+
 namespace __node_rocketmq__ {
 
 #define NAN_GET_CPRODUCER() \
@@ -10,9 +14,13 @@ namespace __node_rocketmq__ {
 
 Nan::Persistent<Function> RocketMQProducer::constructor;
 
-RocketMQProducer::RocketMQProducer(string group_id)
+RocketMQProducer::RocketMQProducer(const char* group_id, const char* instance_name)
 {
-    producer_ptr = CreateProducer(group_id.c_str());
+    producer_ptr = CreateProducer(group_id);
+    if(instance_name)
+    {
+        SetProducerInstanceName(producer_ptr, instance_name);
+    }
 }
 
 RocketMQProducer::~RocketMQProducer()
@@ -49,6 +57,7 @@ NAN_MODULE_INIT(RocketMQProducer::Init)
     Nan::SetPrototypeMethod(tpl, "start", Start);
     Nan::SetPrototypeMethod(tpl, "shutdown", Shutdown);
     Nan::SetPrototypeMethod(tpl, "send", Send);
+    Nan::SetPrototypeMethod(tpl, "setSessionCredentials", SetSessionCredentials);
 
     constructor.Reset(tpl->GetFunction());
     Nan::Set(target, Nan::New("Producer").ToLocalChecked(), tpl->GetFunction());
@@ -61,16 +70,17 @@ NAN_METHOD(RocketMQProducer::New)
 
     if(!info.IsConstructCall())
     {
-        const int argc = 2;
-        Local<Value> argv[argc] = { info[0], info[1] };
+        const int argc = 3;
+        Local<Value> argv[argc] = { info[0], info[1], info[2] };
         Local<Function> _constructor = Nan::New<v8::Function>(constructor);
         info.GetReturnValue().Set(_constructor->NewInstance(context, argc, argv).ToLocalChecked());
         return;
     }
 
     Nan::Utf8String group_id(info[0]);
-    Local<Object> options = Nan::To<Object>(info[1]).ToLocalChecked();
-    RocketMQProducer* producer = new RocketMQProducer(*group_id);
+    Nan::Utf8String instance_name(info[1]);
+    Local<Object> options = Nan::To<Object>(info[2]).ToLocalChecked();
+    RocketMQProducer* producer = new RocketMQProducer(*group_id, info[1]->IsNull() ? NULL : *instance_name);
 
     producer->Wrap(info.This());
 
@@ -108,6 +118,34 @@ NAN_METHOD(RocketMQProducer::Shutdown)
         NULL;
 
     Nan::AsyncQueueWorker(new ProducerStartOrShutdownWorker(callback, producer_ptr, ProducerWorkerType::SHUTDOWN_PRODUCER));
+}
+
+NAN_METHOD(RocketMQProducer::SetSessionCredentials)
+{
+    NAN_GET_CPRODUCER();
+
+    Nan::Utf8String access_key(info[0]);
+    Nan::Utf8String secret_key(info[1]);
+    Nan::Utf8String ons_channel(info[2]);
+
+    int ret;
+    try
+    {
+        ret = SetProducerSessionCredentials(producer_ptr, *access_key, *secret_key, *ons_channel);
+    }
+    catch(runtime_error e)
+    {
+        Nan::ThrowError(e.what());
+    }
+    catch(std::exception& e)
+    {
+        Nan::ThrowError(e.what());
+    }
+    catch(rocketmq::MQException& e)
+    {
+        Nan::ThrowError(e.what());
+    }
+    info.GetReturnValue().Set(ret);
 }
 
 NAN_METHOD(RocketMQProducer::Send)

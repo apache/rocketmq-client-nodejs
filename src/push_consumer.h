@@ -5,10 +5,6 @@
 #include <uv.h>
 #include <nan.h>
 
-#include <queue>
-#include <string>
-using namespace std;
-
 namespace __node_rocketmq__ {
 
 using v8::Context;
@@ -26,7 +22,7 @@ public:
     static int OnMessage(CPushConsumer* consumer_ptr, CMessageExt* msg_ext);
 
 private:
-    explicit RocketMQPushConsumer(string group_id);
+    explicit RocketMQPushConsumer(const char* group_id, const char* instance_name);
     ~RocketMQPushConsumer();
 
     static NAN_METHOD(New);
@@ -34,6 +30,7 @@ private:
     static NAN_METHOD(Shutdown);
     static NAN_METHOD(Subscribe);
     static NAN_METHOD(SetListener);
+    static NAN_METHOD(SetSessionCredentials);
 
     static Nan::Persistent<v8::Function> constructor;
 

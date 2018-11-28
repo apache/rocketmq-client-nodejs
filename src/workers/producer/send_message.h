@@ -3,8 +3,11 @@
 
 #include <nan.h>
 #include <CProducer.h>
+#include <MQClientException.h>
 
 namespace __node_rocketmq__ {
+
+using namespace std;
 
 class ProducerSendMessageWorker : public Nan::AsyncWorker {
 public:
@@ -30,7 +33,11 @@ public:
         {
             SetErrorMessage(e.what());
         }
-        catch(exception& e)
+        catch(std::exception& e)
+        {
+            SetErrorMessage(e.what());
+        }
+        catch(rocketmq::MQException& e)
         {
             SetErrorMessage(e.what());
         }
