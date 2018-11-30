@@ -20,6 +20,7 @@ class RocketMQPushConsumer : public Nan::ObjectWrap {
 public:
     static NAN_MODULE_INIT(Init);
     static int OnMessage(CPushConsumer* consumer_ptr, CMessageExt* msg_ext);
+    static const char* GetMessageColumn(char* name, CMessageExt* msg);
 
 private:
     explicit RocketMQPushConsumer(const char* group_id, const char* instance_name);

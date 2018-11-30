@@ -37,12 +37,6 @@
           "xcode_settings": {
             "GCC_ENABLE_CPP_EXCEPTIONS": "YES"
           },
-          "copies": [
-            {
-              "destination": "<(module_root_dir)/build/Release/",
-              "files": [ "<(module_root_dir)/deps/lib/librocketmq.dylib" ]
-            }
-          ],
           "cflags!": [ "-fno-exceptions" ],
           "cflags_cc!": [ "-fno-exceptions", "-pthread", "-Wl,--no-as-needed", "-ldl" ],
           "cflags_cc": [ "-Wno-ignored-qualifiers" ],

@@ -2,26 +2,26 @@
 
 const co = require("co");
 
+const common = require("./common");
 const Producer = require("../lib/producer");
 
-co(async () => {
+co(function *() {
     const producer = new Producer("testGroup", {
-        nameServer: "127.0.0.1:9876"
+        nameServer: common.nameServer
     });
-    producer.setSessionCredentials("*", "*", "*");
 
     console.time("producer start");
     try {
-        await producer.start();
+        yield producer.start();
     } catch(e) {
         console.error(e);
         process.exit(4);
     }
     console.timeEnd("producer start");
-    for(let i = 0; i < 15; i++) {
+    for(let i = 0; i < common.messageCount; i++) {
         console.time(`send ${i}`);
         try {
-            const ret = await producer.send("test", "baz", {
+            const ret = yield producer.send("test", `baz ${i}`, {
                 keys: "foo",
                 tags: "bar"
             });
@@ -34,6 +34,6 @@ co(async () => {
     }
 
     console.time("producer end");
-    await producer.shutdown();
+    yield producer.shutdown();
     console.timeEnd("producer end");
 });

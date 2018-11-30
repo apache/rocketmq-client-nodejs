@@ -4,7 +4,7 @@
   "description": "RocketMQ binding for Node.js",
   "main": "index.js",
   "scripts": {
-    "test": "npm run lint && echo 'no test yet'",
+    "test": "npm run lint && echo 'temp example test' && node example/producer.js && node example/push_consumer.js",
     "lint": "eslint ."
   },
   "author": "XadillaX <i@2333.moe>",

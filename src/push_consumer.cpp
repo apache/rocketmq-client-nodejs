@@ -13,9 +13,9 @@ struct MessageHandlerParam
 {
     RocketMQPushConsumer* consumer;
     ConsumerAckInner* ack;
-    const char* values[5];
+    CMessageExt* msg;
 };
-char message_handler_param_keys[5][8] = { "topic", "tags", "keys", "body", "id" };
+char message_handler_param_keys[5][8] = { "topic", "tags", "keys", "body", "msgId" };
 
 map<CPushConsumer*, RocketMQPushConsumer*> _push_consumer_map;
 
@@ -25,7 +25,8 @@ map<CPushConsumer*, RocketMQPushConsumer*> _push_consumer_map;
 
 Nan::Persistent<Function> RocketMQPushConsumer::constructor;
 
-RocketMQPushConsumer::RocketMQPushConsumer(const char* group_id, const char* instance_name)
+RocketMQPushConsumer::RocketMQPushConsumer(const char* group_id, const char* instance_name) :
+    consumer_ptr(NULL)
 {
     consumer_ptr = CreatePushConsumer(group_id);
 
@@ -122,10 +123,12 @@ NAN_METHOD(RocketMQPushConsumer::New)
         return;
     }
 
-    Nan::Utf8String group_id(info[0]);
-    Nan::Utf8String instance_name(info[1]);
+    Nan::Utf8String v8_group_id(info[0]);
+    Nan::Utf8String v8_instance_name(info[1]);
+    string group_id = *v8_group_id;
+    string instance_name = *v8_instance_name;
     Local<Object> options = Nan::To<Object>(info[2]).ToLocalChecked();
-    RocketMQPushConsumer* consumer = new RocketMQPushConsumer(*group_id, info[1]->IsNull() ? NULL : *instance_name);
+    RocketMQPushConsumer* consumer = new RocketMQPushConsumer(group_id.c_str(), info[1]->IsNull() ? NULL : instance_name.c_str());
 
     consumer->Wrap(info.This());
 
@@ -169,13 +172,15 @@ NAN_METHOD(RocketMQPushConsumer::Subscribe)
 {
     NAN_GET_CPUSHCONSUMER();
 
-    Nan::Utf8String topic(info[0]);
-    Nan::Utf8String expression(info[1]);
+    Nan::Utf8String v8_topic(info[0]);
+    Nan::Utf8String v8_expression(info[1]);
+    string topic = *v8_topic;
+    string expression = *v8_expression;
 
     int ret;
     try
     {
-        ret = ::Subscribe(consumer_ptr, *topic, *expression);
+        ret = ::Subscribe(consumer_ptr, topic.c_str(), expression.c_str());
     }
     catch (runtime_error e)
     {
@@ -225,6 +230,23 @@ NAN_METHOD(RocketMQPushConsumer::SetSessionCredentials)
     info.GetReturnValue().Set(ret);
 }
 
+const char* RocketMQPushConsumer::GetMessageColumn(char* name, CMessageExt* msg)
+{
+    switch(name[0])
+    {
+    // topic / tags
+    case 't':
+        return name[1] == 'o' ? GetMessageTopic(msg) : GetMessageTags(msg);
+    // keys
+    case 'k': return GetMessageKeys(msg);
+    // body
+    case 'b': return GetMessageBody(msg);
+    // msgId
+    case 'm': return GetMessageId(msg);
+    default: return NULL;
+    }
+}
+
 void close_async_done(uv_handle_t* handle)
 {
     free(handle);
@@ -240,6 +262,7 @@ void RocketMQPushConsumer::HandleMessageInEventLoop(uv_async_t* async)
     MessageHandlerParam* param = (MessageHandlerParam*)(async->data);
     RocketMQPushConsumer* consumer = param->consumer;
     ConsumerAckInner* ack_inner = param->ack;
+    CMessageExt* msg = param->msg;
 
     // create the JavaScript ack object and then set inner ack object
     Local<Function> cons = Nan::New<Function>(ConsumerAck::GetConstructor());
@@ -247,13 +270,14 @@ void RocketMQPushConsumer::HandleMessageInEventLoop(uv_async_t* async)
     ConsumerAck* ack = ObjectWrap::Unwrap<ConsumerAck>(ack_obj);
     ack->SetInner(ack_inner);
 
+    // TODO: const char *GetMessageProperty(CMessageExt *msgExt, const char *key);
     Local<Object> result = Nan::New<Object>();
     for(int i = 0; i < 5; i++)
     {
         Nan::Set(
             result,
             Nan::New(message_handler_param_keys[i]).ToLocalChecked(),
-            Nan::New(param->values[i]).ToLocalChecked());
+            Nan::New(RocketMQPushConsumer::GetMessageColumn(message_handler_param_keys[i], msg)).ToLocalChecked());
     }
 
     Local<Value> argv[2] = {
@@ -281,14 +305,7 @@ int RocketMQPushConsumer::OnMessage(CPushConsumer* consumer_ptr, CMessageExt* ms
     MessageHandlerParam param;
     param.consumer = consumer;
     param.ack = &ack_inner;
-
-    // set message values
-    // TODO: const char *GetMessageProperty(CMessageExt *msgExt, const char *key);
-    param.values[0] = GetMessageTopic(msg_ext);
-    param.values[1] = GetMessageTags(msg_ext);
-    param.values[2] = GetMessageKeys(msg_ext);
-    param.values[3] = GetMessageBody(msg_ext);
-    param.values[4] = GetMessageId(msg_ext);
+    param.msg = msg_ext;
 
     // create a new async handler and bind with `RocketMQPushConsumer::HandleMessageInEventLoop`
     uv_async_t* async = (uv_async_t*)malloc(sizeof(uv_async_t));
