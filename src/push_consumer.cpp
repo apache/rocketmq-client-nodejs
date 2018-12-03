@@ -91,6 +91,29 @@ void RocketMQPushConsumer::SetOptions(Local<Object> options)
             SetPushConsumerMessageBatchMaxSize(consumer_ptr, max_batch_size);
         }
     }
+
+    // set log num & single log size
+    int file_num = 3;
+    int64 file_size = 104857600;
+    Local<Value> _log_file_num_v = Nan::Get(options, Nan::New<String>("logFileNum").ToLocalChecked()).ToLocalChecked();
+    Local<Value> _log_file_size_v = Nan::Get(options, Nan::New<String>("logFileSize").ToLocalChecked()).ToLocalChecked();
+    if(_log_file_num_v->IsNumber())
+    {
+        file_num = _log_file_num_v->Int32Value();
+    }
+    if(_log_file_size_v->IsNumber())
+    {
+        file_size = _log_file_size_v->Int32Value();
+    }
+    SetPushConsumerLogFileNumAndSize(consumer_ptr, file_num, file_size);
+
+    // set log level
+    Local<Value> _log_level_v = Nan::Get(options, Nan::New<String>("logLevel").ToLocalChecked()).ToLocalChecked();
+    if(_log_level_v->IsNumber())
+    {
+        int level = _log_level_v->Int32Value();
+        SetPushConsumerLogLevel(consumer_ptr, (CLogLevel) level);
+    }
 }
 
 NAN_MODULE_INIT(RocketMQPushConsumer::Init)

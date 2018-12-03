@@ -10,7 +10,10 @@ const PushConsumer = require("../lib/push_consumer");
 co(function *() {
     const msgs = [];
     const consumer = new PushConsumer("testGroup", {
-        nameServer: common.nameServer
+        nameServer: common.nameServer,
+        logFileNum: 5,
+        logFileSize: 1048576000,
+        logLevel: "debug"
     });
 
     consumer.subscribe("test", "*");

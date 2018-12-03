@@ -46,6 +46,60 @@ void RocketMQProducer::SetOptions(Local<Object> options)
         Nan::Utf8String namesrv(_name_server_v);
         SetProducerNameServerAddress(producer_ptr, *namesrv);
     }
+
+    // set group name
+    Local<Value> _group_name_v = Nan::Get(options, Nan::New<String>("groupName").ToLocalChecked()).ToLocalChecked();
+    if(_group_name_v->IsString())
+    {
+        Nan::Utf8String group_name(_group_name_v);
+        SetProducerGroupName(producer_ptr, *group_name);
+    }
+
+    // set log num & single log size
+    int file_num = 3;
+    int64 file_size = 104857600;
+    Local<Value> _log_file_num_v = Nan::Get(options, Nan::New<String>("logFileNum").ToLocalChecked()).ToLocalChecked();
+    Local<Value> _log_file_size_v = Nan::Get(options, Nan::New<String>("logFileSize").ToLocalChecked()).ToLocalChecked();
+    if(_log_file_num_v->IsNumber())
+    {
+        file_num = _log_file_num_v->Int32Value();
+    }
+    if(_log_file_size_v->IsNumber())
+    {
+        file_size = _log_file_size_v->Int32Value();
+    }
+    SetProducerLogFileNumAndSize(producer_ptr, file_num, file_size);
+
+    // set log level
+    Local<Value> _log_level_v = Nan::Get(options, Nan::New<String>("logLevel").ToLocalChecked()).ToLocalChecked();
+    if(_log_level_v->IsNumber())
+    {
+        int level = _log_level_v->Int32Value();
+        SetProducerLogLevel(producer_ptr, (CLogLevel)level);
+    }
+
+    // set compress level
+    Local<Value> _compress_level_v = Nan::Get(options, Nan::New<String>("logLevel").ToLocalChecked()).ToLocalChecked();
+    if(_compress_level_v->IsNumber()) {
+        int level = _compress_level_v->Int32Value();
+        SetProducerCompressLevel(producer_ptr, level);
+    }
+
+    // set send message timeout
+    Local<Value> _send_message_timeout_v = Nan::Get(options, Nan::New<String>("sendMessageTimeout").ToLocalChecked()).ToLocalChecked();
+    if(_send_message_timeout_v->IsNumber())
+    {
+        int timeout = _send_message_timeout_v->Int32Value();
+        SetProducerSendMsgTimeout(producer_ptr, timeout);
+    }
+
+    // set max message size
+    Local<Value> _max_message_size_v = Nan::Get(options, Nan::New<String>("maxMessageSize").ToLocalChecked()).ToLocalChecked();
+    if(_max_message_size_v->IsNumber())
+    {
+        int size = _max_message_size_v->Int32Value();
+        SetProducerMaxMessageSize(producer_ptr, size);
+    }
 }
 
 NAN_MODULE_INIT(RocketMQProducer::Init)
