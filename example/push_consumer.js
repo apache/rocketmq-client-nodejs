@@ -5,7 +5,7 @@ const assert = require("assert");
 const co = require("co");
 
 const common = require("./common");
-const PushConsumer = require("../lib/push_consumer");
+const PushConsumer = require("../").PushConsumer;
 
 co(function *() {
     const msgs = [];
@@ -20,6 +20,9 @@ co(function *() {
     consumer.on("message", function(msg, ack) {
         msgs.push(msg);
         ack.done();
+
+        // console.log(msg);
+        // return;
 
         if(msgs.length === common.messageCount) {
             msgs.sort(function(a, b) {

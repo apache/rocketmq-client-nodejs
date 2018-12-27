@@ -40,15 +40,11 @@ public:
             default: break;
             }
         }
-        catch (runtime_error e)
+        catch(const runtime_error e)
         {
             SetErrorMessage(e.what());
         }
-        catch(exception& e)
-        {
-            SetErrorMessage(e.what());
-        }
-        catch(rocketmq::MQException& e)
+        catch(const exception& e)
         {
             SetErrorMessage(e.what());
         }

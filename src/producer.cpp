@@ -79,7 +79,7 @@ void RocketMQProducer::SetOptions(Local<Object> options)
     }
 
     // set compress level
-    Local<Value> _compress_level_v = Nan::Get(options, Nan::New<String>("logLevel").ToLocalChecked()).ToLocalChecked();
+    Local<Value> _compress_level_v = Nan::Get(options, Nan::New<String>("compressLevel").ToLocalChecked()).ToLocalChecked();
     if(_compress_level_v->IsNumber()) {
         int level = _compress_level_v->Int32Value();
         SetProducerCompressLevel(producer_ptr, level);

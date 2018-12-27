@@ -3,7 +3,7 @@
 const co = require("co");
 
 const common = require("./common");
-const Producer = require("../lib/producer");
+const Producer = require("../").Producer;
 
 co(function *() {
     const producer = new Producer("testGroup", {
@@ -36,6 +36,7 @@ co(function *() {
             console.log(ret);
         } catch(e) {
             console.error(e);
+            console.error(e.stack);
             process.exit(4);
         }
     }

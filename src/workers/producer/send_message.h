@@ -29,15 +29,11 @@ public:
         {
             SendMessageSync(producer->GetProducer(), msg, &send_ret);
         }
-        catch(runtime_error e)
+        catch(const runtime_error e)
         {
             SetErrorMessage(e.what());
         }
-        catch(std::exception& e)
-        {
-            SetErrorMessage(e.what());
-        }
-        catch(rocketmq::MQException& e)
+        catch(const std::exception& e)
         {
             SetErrorMessage(e.what());
         }

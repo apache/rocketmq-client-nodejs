@@ -1,6 +1,6 @@
 "use strict";
 
 module.exports = {
-    nameServer: "localhost:9876",
+    nameServer: "127.0.0.1:9876",
     messageCount: 10
 };
