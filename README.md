@@ -1,5 +1,11 @@
 # RocketMQ Client for Node.js
 
+[![Version](http://img.shields.io/npm/v/apache-rocketmq.svg)](https://www.npmjs.com/package/apache-rocketmq)
+[![Downloads](http://img.shields.io/npm/dm/apache-rocketmq.svg)](https://www.npmjs.com/package/apache-rocketmq)
+[![License](https://img.shields.io/npm/l/apache-rocketmq.svg?style=flat)](https://opensource.org/licenses/https://opensource.org/licenses/Apache-2.0)
+[![TravisCI](https://travis-ci.org/apache/rocketmq-client-nodejs.svg)](https://travis-ci.org/apache/rocketmq-client-nodejs)
+[![Dependency](https://david-dm.org/apache/rocketmq-client-nodejs.svg)](https://david-dm.org/apache/rocketmq-client-nodejs)
+
 This official Node.js client is a C++ binding of [rocketmq-client-cpp](https://github.com/apache/rocketmq-client-cpp), which has been proven robust and widely adopted within Alibaba Group by many business units for more than three years.
 
 > **Notice 1:** This client is still in `dev` version. Use it cautiously in production.
@@ -304,4 +310,3 @@ Contributions are warmly welcome! Be it trivial cleanup, major new feature or ot
 ## License
 
 [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0.html) Copyright (C) Apache Software Foundation
-
