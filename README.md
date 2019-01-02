@@ -91,7 +91,7 @@ producer.start().then(() => {
 #### shutdown
 
 ```javascript
-producer.start([callback]);
+producer.shutdown([callback]);
 ```
 
 `.shutdown` receives a callback function. If no callback passed, this function will return a Promise object.
@@ -219,7 +219,7 @@ consumer.start().then(() => {
 #### shutdown
 
 ```javascript
-consumer.start([callback]);
+consumer.shutdown([callback]);
 ```
 
 `.shutdown` receives a callback function. If no callback passed, this function will return a Promise object.
