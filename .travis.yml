@@ -1,6 +1,8 @@
 language: node_js
 
 node_js: 10
+env:
+  NODE_ROCKETMQ_REGISTRY=https://opensource-rocketmq-client-us.oss-us-west-1.aliyuncs.com/
 
 before_script:
   - wget http://us.mirrors.quenda.co/apache/rocketmq/4.3.2/rocketmq-all-4.3.2-bin-release.zip
