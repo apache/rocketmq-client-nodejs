@@ -1,6 +1,10 @@
 # Created by https://www.gitignore.io/api/c++,node,linux,macos,windows
 # Edit at https://www.gitignore.io/?templates=c++,node,linux,macos,windows
 
+### IDE ###
+.idea
+idea/*
+
 ### C++ ###
 # Prerequisites
 *.d
