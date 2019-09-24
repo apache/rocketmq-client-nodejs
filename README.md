@@ -6,7 +6,8 @@
 [![TravisCI](https://travis-ci.org/apache/rocketmq-client-nodejs.svg)](https://travis-ci.org/apache/rocketmq-client-nodejs)
 [![Dependency](https://david-dm.org/apache/rocketmq-client-nodejs.svg)](https://david-dm.org/apache/rocketmq-client-nodejs)
 
-This official Node.js client is a C++ binding of [rocketmq-client-cpp](https://github.com/apache/rocketmq-client-cpp), which has been proven robust and widely adopted within Alibaba Group by many business units for more than three years.
+This official Node.js client is a lightweight wrapper around  [rocketmq-client-cpp](https://github.com/apache/rocketmq-client-cpp), a finely tuned CPP client.
+
 
 > **Notice 1:** This client is still in `dev` version. Use it cautiously in production.
 
