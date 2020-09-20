@@ -302,7 +302,7 @@ consumer.on("message", function(msg, ack) {
 + Docs: https://rocketmq.apache.org/docs/quick-start/
 + Issues: https://github.com/apache/rocketmq-client-nodejs/issues
 + Ask: https://stackoverflow.com/questions/tagged/rocketmq
-+ Slack: https://rocketmq-community.slack.com/
++ Slack: https://rocketmq-invite-automation.herokuapp.com/
 
 ## How to Contribute
 
