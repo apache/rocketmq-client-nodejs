@@ -17,46 +17,34 @@
 #ifndef __ROCKETMQ_PRODUCER_H__
 #define __ROCKETMQ_PRODUCER_H__
 
-#include <CProducer.h>
-#include <nan.h>
+#include <napi.h>
+
+#include <DefaultMQProducer.h>
 
 namespace __node_rocketmq__ {
 
-using v8::Context;
-using v8::Function;
-using v8::FunctionTemplate;
-using v8::Isolate;
-using v8::Local;
-using v8::Object;
-using v8::String;
-using v8::Value;
+class RocketMQProducer : public Napi::ObjectWrap<RocketMQProducer> {
+ public:
+  static Napi::Object Init(Napi::Env env, Napi::Object exports);
 
-class RocketMQProducer : public Nan::ObjectWrap {
-public:
-    static NAN_MODULE_INIT(Init);
+  RocketMQProducer(const Napi::CallbackInfo& info);
+  ~RocketMQProducer();
 
-public:
-    CProducer* GetProducer() { return producer_ptr; }
+ private:
+  Napi::Value SetSessionCredentials(const Napi::CallbackInfo& info);
 
-private:
-    explicit RocketMQProducer(const char* group_id, const char* instance_name);
-    ~RocketMQProducer();
+  Napi::Value Start(const Napi::CallbackInfo& info);
+  Napi::Value Shutdown(const Napi::CallbackInfo& info);
 
-    static NAN_METHOD(New);
-    static NAN_METHOD(Start);
-    static NAN_METHOD(Shutdown);
-    static NAN_METHOD(Send);
-    static NAN_METHOD(SetSessionCredentials);
+  Napi::Value Send(const Napi::CallbackInfo& info);
 
-    static Nan::Persistent<Function> constructor;
+ private:
+  void SetOptions(const Napi::Object& options);
 
-private:
-    void SetOptions(Local<Object> options);
-
-private:
-    CProducer* producer_ptr;
+ private:
+  rocketmq::DefaultMQProducer producer_;
 };
 
-}
+}  // namespace __node_rocketmq__
 
 #endif

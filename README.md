@@ -6,12 +6,12 @@
 [![TravisCI](https://travis-ci.org/apache/rocketmq-client-nodejs.svg)](https://travis-ci.org/apache/rocketmq-client-nodejs)
 [![Dependency](https://david-dm.org/apache/rocketmq-client-nodejs.svg)](https://david-dm.org/apache/rocketmq-client-nodejs)
 
-This official Node.js client is a lightweight wrapper around  [rocketmq-client-cpp](https://github.com/apache/rocketmq-client-cpp), a finely tuned CPP client.
+This official Node.js client is a lightweight wrapper around [re_dev branch of rocketmq-client-cpp](https://github.com/apache/rocketmq-client-cpp/tree/re_dev), a finely tuned CPP client.
 
 
 > **Notice 1:** This client is still in `dev` version. Use it cautiously in production.
 
-> **Notice 2:** This SDK is now only support macOS and Ubuntu **14.04**. Ubuntu 16+ is not supported and CentOS is not tested yet.
+> **Notice 2:** This SDK is now only tested on macOS. Ubuntu and CentOS is not tested yet.
 
 ## Installation
 
@@ -50,7 +50,8 @@ new Producer(groupId[, instanceName][, options]);
   - `compressLevel`: the compress level (0-9) of this producer, default to `5` where `0` is fastest and `9` is most compressed;
   - `sendMessageTimeout`: send message timeout millisecond, default to `3000` and suggestion is 2000 - 3000ms;
   - `maxMessageSize`: max message size with unit (B), default to `1024 * 128` which means 128K;
-  - `logFileNum`: C++ core logic log file number, default to 3 and log file path is `$HOME/logs/rocketmq-cpp`;
+  - `logDir`: the folder where C++ core logic log store, default log file path is `$HOME/logs/rocketmq-cpp`;
+  - `logFileNum`: C++ core logic log file number, default to 3;
   - `logFileSize`: size of each C++ core logic log file with unit (B);
   - `logLevel`: C++ core logic log level in `"fatal"`, `"error"`, `"warn"`, `"info"`, `"debug"`, `"trace"` and `"num"`.
 
@@ -177,7 +178,8 @@ new PushConsumer(groupId[, instanceName][, options]);
   - `nameServer`: the name server of RocketMQ;
   - `threadCount`: the thread number of underlying C++ logic;
   - `maxBatchSize`: message max batch size;
-  - `logFileNum`: C++ core logic log file number, default to 3 and log file path is `$HOME/logs/rocketmq-cpp`;
+  - `logDir`: the folder where C++ core logic log store, default log file path is `$HOME/logs/rocketmq-cpp`;
+  - `logFileNum`: C++ core logic log file number, default to 3;
   - `logFileSize`: size of each C++ core logic log file with unit (B);
   - `logLevel`: C++ core logic log level in `"fatal"`, `"error"`, `"warn"`, `"info"`, `"debug"`, `"trace"` and `"num"`.
 

@@ -15,76 +15,52 @@
  * limitations under the License.
  */
 #include "consumer_ack.h"
+#include <exception>
+#include "napi.h"
 
 namespace __node_rocketmq__ {
 
-Nan::Persistent<Function> ConsumerAck::constructor;
+Napi::Object ConsumerAck::Init(Napi::Env env, Napi::Object exports) {
+  Napi::Function func = DefineClass(
+      env, "ConsumerAck", {InstanceMethod<&ConsumerAck::Done>("done")});
 
-ConsumerAck::ConsumerAck() :
-    inner(NULL)
-{
+  Napi::FunctionReference* constructor = new Napi::FunctionReference();
+  *constructor = Napi::Persistent(func);
+  env.SetInstanceData<Napi::FunctionReference>(constructor);
+
+  exports.Set("ConsumerAck", func);
+  return exports;
 }
 
-ConsumerAck::~ConsumerAck()
-{
-    inner = NULL;
+Napi::Object ConsumerAck::NewInstance(Napi::Env env) {
+  Napi::Object obj = env.GetInstanceData<Napi::FunctionReference>()->New({});
+  return obj;
 }
 
-NAN_MODULE_INIT(ConsumerAck::Init)
-{
-    Local<FunctionTemplate> tpl = Nan::New<FunctionTemplate>(New);
-    tpl->SetClassName(Nan::New("ConsumerAck").ToLocalChecked());
-    tpl->InstanceTemplate()->SetInternalFieldCount(1);
+ConsumerAck::ConsumerAck(const Napi::CallbackInfo& info)
+    : Napi::ObjectWrap<ConsumerAck>(info) {}
 
-    Nan::SetPrototypeMethod(tpl, "done", Done);
-
-    constructor.Reset(tpl->GetFunction());
-    Nan::Set(target, Nan::New("ConsumerAck").ToLocalChecked(), tpl->GetFunction());
+void ConsumerAck::SetPromise(std::promise<bool>&& promise) {
+  promise_ = std::move(promise);
 }
 
-NAN_METHOD(ConsumerAck::New)
-{
-    Isolate* isolate = info.GetIsolate();
-    Local<Context> context = Context::New(isolate);
+void ConsumerAck::Done(bool ack) {
+  promise_.set_value(ack);
+}
 
-    if(!info.IsConstructCall())
-    {
-        Local<Function> _constructor = Nan::New<Function>(constructor);
-        info.GetReturnValue().Set(_constructor->NewInstance(context, 0, 0).ToLocalChecked());
-        return;
+void ConsumerAck::Done(std::exception_ptr exception) {
+  promise_.set_exception(exception);
+}
+
+Napi::Value ConsumerAck::Done(const Napi::CallbackInfo& info) {
+  if (info.Length() >= 1) {
+    Napi::Value ack = info[0];
+    if (ack.IsBoolean() && !ack.ToBoolean()) {
+      Done(false);
     }
-
-    ConsumerAck* producer = new ConsumerAck();
-    producer->Wrap(info.This());
-    info.GetReturnValue().Set(info.This());
+  }
+  Done(true);
+  return info.Env().Undefined();
 }
 
-NAN_METHOD(ConsumerAck::Done)
-{
-    ConsumerAck* ack = ObjectWrap::Unwrap<ConsumerAck>(info.Holder());
-    bool succ = true;
-
-    if(info.Length() >= 1)
-    {
-        succ = (info[0]->IsUndefined() || info[0]->IsNull() || Nan::To<bool>(info[0]).FromJust());
-    }
-
-    // call inner ack's `Ack` function to emit the true `Acker`'s `Ack` function
-    // and finish waiting of consume thread
-    CConsumeStatus status = succ ?
-        CConsumeStatus::E_CONSUME_SUCCESS :
-        CConsumeStatus::E_RECONSUME_LATER;
-    ack->Ack(status);
-}
-
-void ConsumerAck::Ack(CConsumeStatus status)
-{
-    if(inner)
-    {
-        // call inner ack in the main event loop
-        inner->Ack(status);
-        inner = NULL;
-    }
-}
-
-}
+}  // namespace __node_rocketmq__

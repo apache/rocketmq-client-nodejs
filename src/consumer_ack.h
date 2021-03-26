@@ -17,50 +17,31 @@
 #ifndef __ROCKETMQ_CONSUMER_ACK_H__
 #define __ROCKETMQ_CONSUMER_ACK_H__
 
-#include "consumer_ack_inner.h"
-#include <nan.h>
+#include <future>
+
+#include <napi.h>
 
 namespace __node_rocketmq__ {
 
-using v8::Context;
-using v8::Function;
-using v8::FunctionTemplate;
-using v8::Isolate;
-using v8::Local;
-using v8::Object;
-using v8::String;
-using v8::Value;
+class ConsumerAck : public Napi::ObjectWrap<ConsumerAck> {
+ public:
+  static Napi::Object Init(Napi::Env env, Napi::Object exports);
+  static Napi::Object NewInstance(Napi::Env env);
 
-class ConsumerAck : public Nan::ObjectWrap {
-public:
-    static NAN_MODULE_INIT(Init);
+  ConsumerAck(const Napi::CallbackInfo& info);
 
-private:
-    explicit ConsumerAck();
-    ~ConsumerAck();
+  void SetPromise(std::promise<bool>&& promise);
 
-    static NAN_METHOD(New);
-    static NAN_METHOD(Done);
+  void Done(bool ack);
+  void Done(std::exception_ptr exception);
 
-    void Ack(CConsumeStatus status);
+ private:
+  Napi::Value Done(const Napi::CallbackInfo& info);
 
-    static Nan::Persistent<v8::Function> constructor;
-
-public:
-    void SetInner(ConsumerAckInner* _inner)
-    {
-        inner = _inner;
-    }
-
-    static Nan::Persistent<v8::Function>& GetConstructor()
-    {
-        return constructor;
-    }
-
-private:
-    ConsumerAckInner* inner;
+ private:
+  std::promise<bool> promise_;
 };
 
-}
+}  // namespace __node_rocketmq__
 
 #endif

@@ -197,6 +197,8 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
-build
 package-lock.json
-.vscode
+.vscode/
+build/
+Debug/
+Release/

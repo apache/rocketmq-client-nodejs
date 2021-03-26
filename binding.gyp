@@ -21,21 +21,21 @@
         "src/rocketmq.cpp",
         "src/producer.cpp",
         "src/push_consumer.cpp",
-        "src/consumer_ack.cpp",
-        "src/consumer_ack_inner.cpp"
+        "src/consumer_ack.cpp"
       ],
       "include_dirs": [
         "deps/rocketmq/include",
-        "<!(node -e \"require('nan')\")"
+        "<!@(node -p \"require('node-addon-api').include\")"
+      ],
+      "library_dirs": [
+        "<(module_root_dir)/deps/rocketmq/bin"
       ],
       "conditions": [
         ["OS==\"linux\"", {
-          "libraries": [
-            "<(module_root_dir)/deps/lib/librocketmq.a"
-          ],
-          "cflags_cc!": [ "-fno-exceptions", "-pthread", "-Wl,--no-as-needed", "-ldl" ],
-          "cflags_cc": [ "-Wno-ignored-qualifiers" ],
-          "cflags": [ "-std=c++11", "-g" ]
+          "libraries": [ "-lrocketmq" ],
+          "cflags_cc!": [ "-fno-exceptions", "-fno-rtti", "-pthread", "-Wl,--no-as-needed", "-ldl" ],
+          "cflags_cc": [ "-Wall", "-std=c++11" ],
+          "cflags": [ "-g" ]
         }],
         ["OS==\"win\"", {
           "libraries": [
@@ -49,13 +49,13 @@
           ]
         }],
         ["OS==\"mac\"", {
+          "libraries": [ "-lrocketmq" ],
           "xcode_settings": {
-            "GCC_ENABLE_CPP_EXCEPTIONS": "YES"
+            "GCC_ENABLE_CPP_EXCEPTIONS": "YES",
+            'GCC_ENABLE_CPP_RTTI': 'YES'
           },
-          "cflags!": [ "-fno-exceptions" ],
-          "cflags_cc!": [ "-fno-exceptions", "-pthread", "-Wl,--no-as-needed", "-ldl" ],
-          "cflags_cc": [ "-Wno-ignored-qualifiers" ],
-          "cflags": [ "-std=c++11", "-stdlib=libc++" ]
+          "cflags_cc!": [ "-fno-exceptions", "-fno-rtti", "-pthread", "-Wl,--no-as-needed", "-ldl" ],
+          "cflags_cc": [ "-Wall", "-std=c++11", "-stdlib=libc++" ]
         }]
       ]
     }

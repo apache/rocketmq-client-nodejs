@@ -1,25 +1,23 @@
 {
   "name": "apache-rocketmq",
-  "version": "1.0.0-rc1",
-  "cppSDKVersion": "1.2.0",
+  "version": "2.0.0-rc1",
+  "cppSDKVersion": "3.0.0",
   "description": "RocketMQ binding for Node.js",
+  "license": "Apache-2.0",
+  "author": "James Yin <ifplusor@apache.org>",
   "main": "index.js",
   "scripts": {
+    "preinstall": "git submodule update --init --recommend-shallow",
+    "install": "if [ ! -d deps/rocketmq/bin ]; then deps/rocketmq/build.sh; fi && node-gyp rebuild",
     "test": "npm run lint && echo 'temp example test' && node example/producer.js && node example/push_consumer.js",
-    "lint": "eslint .",
-    "install": "node ./script/download_lib.js && node-gyp rebuild"
+    "lint": "eslint ."
   },
-  "author": "XadillaX <i@2333.moe>",
-  "license": "Apache-2.0",
   "dependencies": {
-    "co": "^4.6.0",
-    "destroy": "^1.0.4",
-    "getos": "^3.1.1",
-    "mkdirp": "^0.5.1",
-    "nan": "^2.11.1",
-    "urllib": "^2.31.3"
+    "bindings": "^1.5.0",
+    "node-addon-api": "^3.1.0"
   },
   "devDependencies": {
+    "co": "^4.6.0",
     "eslint": "^5.9.0",
     "eslint-config-rocketmq-style": "^1.0.0"
   }

@@ -15,253 +15,276 @@
  * limitations under the License.
  */
 #include "producer.h"
-#include "workers/producer/send_message.h"
-#include "workers/producer/start_or_shutdown.h"
 
-#include <MQClientException.h>
+#include <cstddef>
+#include <exception>
 #include <string>
-using namespace std;
+
+#include <napi.h>
+
+#include <ClientRPCHook.h>
+#include <LoggerConfig.h>
+#include <MQException.h>
+#include <MQMessage.h>
+#include <SendCallback.h>
 
 namespace __node_rocketmq__ {
 
-#define NAN_GET_CPRODUCER() \
-    RocketMQProducer* _v8_producer = ObjectWrap::Unwrap<RocketMQProducer>(info.Holder()); \
-    CProducer* producer_ptr = _v8_producer->GetProducer();
+Napi::Object RocketMQProducer::Init(Napi::Env env, Napi::Object exports) {
+  Napi::Function func =
+      DefineClass(env,
+                  "RocketMQProducer",
+                  {
+                      InstanceMethod<&RocketMQProducer::Start>("start"),
+                      InstanceMethod<&RocketMQProducer::Shutdown>("shutdown"),
+                      InstanceMethod<&RocketMQProducer::Send>("send"),
+                      InstanceMethod<&RocketMQProducer::SetSessionCredentials>(
+                          "setSessionCredentials"),
+                  });
 
-Nan::Persistent<Function> RocketMQProducer::constructor;
+  Napi::FunctionReference* constructor = new Napi::FunctionReference();
+  *constructor = Napi::Persistent(func);
+  env.SetInstanceData<Napi::FunctionReference>(constructor);
 
-RocketMQProducer::RocketMQProducer(const char* group_id, const char* instance_name)
-{
-    producer_ptr = CreateProducer(group_id);
-    if(instance_name)
-    {
-        SetProducerInstanceName(producer_ptr, instance_name);
-    }
+  exports.Set("Producer", func);
+  return exports;
 }
 
-RocketMQProducer::~RocketMQProducer()
-{
-    try
-    {
-        ShutdownProducer(producer_ptr);
-    }
-    catch (...)
-    {
-        //
-    }
+RocketMQProducer::RocketMQProducer(const Napi::CallbackInfo& info)
+    : Napi::ObjectWrap<RocketMQProducer>(info), producer_("") {
+  const Napi::Value group_name = info[0];
+  if (group_name.IsString()) {
+    producer_.set_group_name(group_name.ToString());
+  }
 
-    DestroyProducer(producer_ptr);
-}
+  const Napi::Value instance_name = info[1];
+  if (instance_name.IsString()) {
+    producer_.set_instance_name(instance_name.ToString());
+  }
 
-void RocketMQProducer::SetOptions(Local<Object> options)
-{
-    // set name server
-    Local<Value> _name_server_v = Nan::Get(options, Nan::New<String>("nameServer").ToLocalChecked()).ToLocalChecked();
-    if(_name_server_v->IsString())
-    {
-        Nan::Utf8String namesrv(_name_server_v);
-        SetProducerNameServerAddress(producer_ptr, *namesrv);
-    }
-
-    // set group name
-    Local<Value> _group_name_v = Nan::Get(options, Nan::New<String>("groupName").ToLocalChecked()).ToLocalChecked();
-    if(_group_name_v->IsString())
-    {
-        Nan::Utf8String group_name(_group_name_v);
-        SetProducerGroupName(producer_ptr, *group_name);
-    }
-
-    // set log num & single log size
-    int file_num = 3;
-    int64 file_size = 104857600;
-    Local<Value> _log_file_num_v = Nan::Get(options, Nan::New<String>("logFileNum").ToLocalChecked()).ToLocalChecked();
-    Local<Value> _log_file_size_v = Nan::Get(options, Nan::New<String>("logFileSize").ToLocalChecked()).ToLocalChecked();
-    if(_log_file_num_v->IsNumber())
-    {
-        file_num = _log_file_num_v->Int32Value();
-    }
-    if(_log_file_size_v->IsNumber())
-    {
-        file_size = _log_file_size_v->Int32Value();
-    }
-    SetProducerLogFileNumAndSize(producer_ptr, file_num, file_size);
-
-    // set log level
-    Local<Value> _log_level_v = Nan::Get(options, Nan::New<String>("logLevel").ToLocalChecked()).ToLocalChecked();
-    if(_log_level_v->IsNumber())
-    {
-        int level = _log_level_v->Int32Value();
-        SetProducerLogLevel(producer_ptr, (CLogLevel)level);
-    }
-
-    // set compress level
-    Local<Value> _compress_level_v = Nan::Get(options, Nan::New<String>("compressLevel").ToLocalChecked()).ToLocalChecked();
-    if(_compress_level_v->IsNumber()) {
-        int level = _compress_level_v->Int32Value();
-        SetProducerCompressLevel(producer_ptr, level);
-    }
-
-    // set send message timeout
-    Local<Value> _send_message_timeout_v = Nan::Get(options, Nan::New<String>("sendMessageTimeout").ToLocalChecked()).ToLocalChecked();
-    if(_send_message_timeout_v->IsNumber())
-    {
-        int timeout = _send_message_timeout_v->Int32Value();
-        SetProducerSendMsgTimeout(producer_ptr, timeout);
-    }
-
-    // set max message size
-    Local<Value> _max_message_size_v = Nan::Get(options, Nan::New<String>("maxMessageSize").ToLocalChecked()).ToLocalChecked();
-    if(_max_message_size_v->IsNumber())
-    {
-        int size = _max_message_size_v->Int32Value();
-        SetProducerMaxMessageSize(producer_ptr, size);
-    }
-}
-
-NAN_MODULE_INIT(RocketMQProducer::Init)
-{
-    Local<FunctionTemplate> tpl = Nan::New<FunctionTemplate>(New);
-    tpl->SetClassName(Nan::New("RocketMQProducer").ToLocalChecked());
-    tpl->InstanceTemplate()->SetInternalFieldCount(1);
-
-    Nan::SetPrototypeMethod(tpl, "start", Start);
-    Nan::SetPrototypeMethod(tpl, "shutdown", Shutdown);
-    Nan::SetPrototypeMethod(tpl, "send", Send);
-    Nan::SetPrototypeMethod(tpl, "setSessionCredentials", SetSessionCredentials);
-
-    constructor.Reset(tpl->GetFunction());
-    Nan::Set(target, Nan::New("Producer").ToLocalChecked(), tpl->GetFunction());
-}
-
-NAN_METHOD(RocketMQProducer::New)
-{
-    Isolate* isolate = info.GetIsolate();
-    Local<Context> context = Context::New(isolate);
-
-    if(!info.IsConstructCall())
-    {
-        const int argc = 3;
-        Local<Value> argv[argc] = { info[0], info[1], info[2] };
-        Local<Function> _constructor = Nan::New<v8::Function>(constructor);
-        info.GetReturnValue().Set(_constructor->NewInstance(context, argc, argv).ToLocalChecked());
-        return;
-    }
-
-    Nan::Utf8String group_id(info[0]);
-    Nan::Utf8String instance_name(info[1]);
-    Local<Object> options = Nan::To<Object>(info[2]).ToLocalChecked();
-    RocketMQProducer* producer = new RocketMQProducer(*group_id, info[1]->IsNull() ? NULL : *instance_name);
-
-    producer->Wrap(info.This());
-
+  const Napi::Value options = info[2];
+  if (options.IsObject()) {
     // try to set options
-    try
-    {
-        producer->SetOptions(options);
-    }
-    catch (runtime_error e)
-    {
-        Nan::ThrowError(e.what());
-        return;
-    }
-
-    info.GetReturnValue().Set(info.This());
+    SetOptions(options.ToObject());
+  }
 }
 
-NAN_METHOD(RocketMQProducer::Start)
-{
-    NAN_GET_CPRODUCER();
-
-    Nan::Callback* callback = (info[0]->IsFunction()) ?
-        new Nan::Callback(Nan::To<Function>(info[0]).ToLocalChecked()) :
-        NULL;
-
-    Nan::AsyncQueueWorker(new ProducerStartOrShutdownWorker(callback, producer_ptr, ProducerWorkerType::START_PRODUCER));
+RocketMQProducer::~RocketMQProducer() {
+  producer_.shutdown();
 }
 
-NAN_METHOD(RocketMQProducer::Shutdown)
-{
-    NAN_GET_CPRODUCER();
+void RocketMQProducer::SetOptions(const Napi::Object& options) {
+  // set name server
+  Napi::Value name_server = options.Get("nameServer");
+  if (name_server.IsString()) {
+    producer_.set_namesrv_addr(name_server.ToString());
+  }
 
-    Nan::Callback* callback = (info[0]->IsFunction()) ?
-        new Nan::Callback(Nan::To<Function>(info[0]).ToLocalChecked()) :
-        NULL;
+  // set group name
+  Napi::Value group_name = options.Get("groupName");
+  if (group_name.IsString()) {
+    producer_.set_group_name(group_name.ToString());
+  }
 
-    Nan::AsyncQueueWorker(new ProducerStartOrShutdownWorker(callback, producer_ptr, ProducerWorkerType::SHUTDOWN_PRODUCER));
+  // set max message size
+  Napi::Value max_message_size = options.Get("maxMessageSize");
+  if (max_message_size.IsNumber()) {
+    producer_.set_max_message_size(max_message_size.ToNumber());
+  }
+
+  // set compress level
+  Napi::Value compress_level = options.Get("compressLevel");
+  if (compress_level.IsNumber()) {
+    producer_.set_compress_level(compress_level.ToNumber());
+  }
+
+  // set send message timeout
+  Napi::Value send_message_timeout = options.Get("sendMessageTimeout");
+  if (send_message_timeout.IsNumber()) {
+    producer_.set_send_msg_timeout(send_message_timeout.ToNumber());
+  }
+
+  // set log level
+  Napi::Value log_level = options.Get("logLevel");
+  if (log_level.IsNumber()) {
+    int32_t level = log_level.ToNumber();
+    if (level >= 0 && level < rocketmq::LogLevel::LOG_LEVEL_LEVEL_NUM) {
+      rocketmq::GetDefaultLoggerConfig().set_level(
+          static_cast<rocketmq::LogLevel>(level));
+    }
+  }
+
+  // set log directory
+  Napi::Value log_dir = options.Get("logDir");
+  if (log_dir.IsString()) {
+    rocketmq::GetDefaultLoggerConfig().set_path(log_dir.ToString());
+  }
+
+  // set log file size
+  Napi::Value log_file_size = options.Get("logFileSize");
+  if (log_file_size.IsNumber()) {
+    rocketmq::GetDefaultLoggerConfig().set_file_count(log_file_size.ToNumber());
+  }
+
+  // set log file num
+  Napi::Value log_file_num = options.Get("logFileNum");
+  if (log_file_num.IsNumber()) {
+    rocketmq::GetDefaultLoggerConfig().set_file_count(log_file_num.ToNumber());
+  }
 }
 
-NAN_METHOD(RocketMQProducer::SetSessionCredentials)
-{
-    NAN_GET_CPRODUCER();
+Napi::Value RocketMQProducer::SetSessionCredentials(
+    const Napi::CallbackInfo& info) {
+  Napi::String access_key = info[0].As<Napi::String>();
+  Napi::String secret_key = info[1].As<Napi::String>();
+  Napi::String ons_channel = info[2].As<Napi::String>();
 
-    Nan::Utf8String access_key(info[0]);
-    Nan::Utf8String secret_key(info[1]);
-    Nan::Utf8String ons_channel(info[2]);
+  auto rpc_hook = std::make_shared<rocketmq::ClientRPCHook>(
+      rocketmq::SessionCredentials(access_key, secret_key, ons_channel));
+  producer_.setRPCHook(rpc_hook);
 
-    int ret;
-    try
-    {
-        ret = SetProducerSessionCredentials(producer_ptr, *access_key, *secret_key, *ons_channel);
-    }
-    catch(runtime_error e)
-    {
-        Nan::ThrowError(e.what());
-    }
-    catch(std::exception& e)
-    {
-        Nan::ThrowError(e.what());
-    }
-    catch(rocketmq::MQException& e)
-    {
-        Nan::ThrowError(e.what());
-    }
-    info.GetReturnValue().Set(ret);
+  return info.Env().Undefined();
 }
 
-NAN_METHOD(RocketMQProducer::Send)
-{
-    Nan::Utf8String topic(info[0]);
-    Local<Object> options = Nan::To<Object>(info[2]).ToLocalChecked();
+class ProducerStartWorker : public Napi::AsyncWorker {
+ public:
+  ProducerStartWorker(const Napi::Function& callback,
+                      const rocketmq::DefaultMQProducer& producer)
+      : Napi::AsyncWorker(callback), producer_(producer) {}
 
-    CMessage* msg = CreateMessage(*topic);
+  void Execute() override { producer_.start(); }
 
-    Local<Value> _tags_to_be_checked = Nan::Get(options, Nan::New<String>("tags").ToLocalChecked()).ToLocalChecked();
-    Local<Value> _keys_to_be_checked = Nan::Get(options, Nan::New<String>("keys").ToLocalChecked()).ToLocalChecked();
+ private:
+  rocketmq::DefaultMQProducer producer_;
+};
 
-    if(_tags_to_be_checked->IsString())
-    {
-        Nan::Utf8String tags(_tags_to_be_checked);
-        SetMessageTags(msg, *tags);
-    }
-
-    if(_keys_to_be_checked->IsString())
-    {
-        Nan::Utf8String keys(_keys_to_be_checked);
-        SetMessageKeys(msg, *keys);
-    }
-
-    // set message body:
-    //   1. if it's a string, call `SetMessageBody`;
-    //   2. if it's a buffer, call `SetByteMessageBody`.
-    if(info[1]->IsString())
-    {
-        Nan::Utf8String body(info[1]);
-        SetMessageBody(msg, *body);
-    }
-    else
-    {
-        Local<Object> node_buff_object = Nan::To<Object>(info[1]).ToLocalChecked();
-        unsigned int length = node::Buffer::Length(node_buff_object);
-        const char* buff = node::Buffer::Data(node_buff_object);
-        SetByteMessageBody(msg, buff, length);
-    }
-
-    Nan::Callback* callback = (info[3]->IsFunction()) ?
-        new Nan::Callback(Nan::To<Function>(info[3]).ToLocalChecked()) :
-        NULL;
-
-    RocketMQProducer* producer = ObjectWrap::Unwrap<RocketMQProducer>(info.Holder());
-    Nan::AsyncQueueWorker(new ProducerSendMessageWorker(callback, producer, msg));
+Napi::Value RocketMQProducer::Start(const Napi::CallbackInfo& info) {
+  Napi::Function callback = info[0].As<Napi::Function>();
+  auto* worker = new ProducerStartWorker(callback, producer_);
+  worker->Queue();
+  return info.Env().Undefined();
 }
 
+class ProducerShutdownWorker : public Napi::AsyncWorker {
+ public:
+  ProducerShutdownWorker(const Napi::Function& callback,
+                         const rocketmq::DefaultMQProducer& producer)
+      : Napi::AsyncWorker(callback), producer_(producer) {}
+
+  void Execute() override { producer_.shutdown(); }
+
+ private:
+  rocketmq::DefaultMQProducer producer_;
+};
+
+Napi::Value RocketMQProducer::Shutdown(const Napi::CallbackInfo& info) {
+  Napi::Function callback = info[0].As<Napi::Function>();
+  auto* worker = new ProducerShutdownWorker(callback, producer_);
+  worker->Queue();
+  return info.Env().Undefined();
 }
+
+struct ResultOrException {
+  std::unique_ptr<rocketmq::SendResult> result;
+  std::exception_ptr exception;
+};
+
+void CallProducerSendJsCallback(Napi::Env env,
+                                Napi::Function callback,
+                                std::nullptr_t*,
+                                ResultOrException* data) {
+  std::unique_ptr<ResultOrException> data_guard(data);
+  if (env != nullptr) {
+    if (callback != nullptr) {
+      if (data->exception) {
+        try {
+          std::rethrow_exception(data->exception);
+        } catch (const std::exception& e) {
+          callback.Call(Napi::Object::New(callback.Env()),
+                        {Napi::Error::New(env, e.what()).Value()});
+        }
+      } else {
+        callback.Call(Napi::Object::New(callback.Env()),
+                      {env.Undefined(),
+                       Napi::Number::New(env, data->result->send_status()),
+                       Napi::String::New(env, data->result->msg_id()),
+                       Napi::Number::New(env, data->result->queue_offset())});
+      }
+    }
+  }
+}
+
+class ProducerSendCallback : public rocketmq::AutoDeleteSendCallback {
+ public:
+  ProducerSendCallback(Napi::Env&& env, Napi::Function&& callback)
+      : callback_(
+            Callback::New(env, callback, "RocketMQ Send Callback", 0, 1)) {}
+
+  ~ProducerSendCallback() { callback_.Release(); }
+
+  void onSuccess(rocketmq::SendResult& send_result) override {
+    auto* data =
+        new ResultOrException{std::unique_ptr<rocketmq::SendResult>(
+                                  new rocketmq::SendResult(send_result)),
+                              nullptr};
+    napi_status status = callback_.BlockingCall(data);
+    if (status != napi_ok) {
+      // TODO: Handle error
+      std::exit(-1);
+    }
+  }
+
+  void onException(rocketmq::MQException& exception) noexcept override {
+    auto* data =
+        new ResultOrException{nullptr, std::make_exception_ptr(exception)};
+    napi_status status = callback_.BlockingCall(data);
+    if (status != napi_ok) {
+      // TODO: Handle error
+      std::exit(-1);
+    }
+  }
+
+ private:
+  using Callback = Napi::TypedThreadSafeFunction<std::nullptr_t,
+                                                 ResultOrException,
+                                                 &CallProducerSendJsCallback>;
+
+  Callback callback_;
+};
+
+Napi::Value RocketMQProducer::Send(const Napi::CallbackInfo& info) {
+  rocketmq::MQMessage message = [&]() {
+    Napi::String topic = info[0].As<Napi::String>();
+    Napi::Value body = info[1];
+    if (body.IsString()) {
+      return rocketmq::MQMessage(topic, body.ToString());
+    } else {
+      Napi::Buffer<char> buffer = body.As<Napi::Buffer<char>>();
+      return rocketmq::MQMessage(topic,
+                                 std::string(buffer.Data(), buffer.Length()));
+    }
+  }();
+
+  const Napi::Value options_v = info[2];
+  if (options_v.IsObject()) {
+    const Napi::Object options = options_v.ToObject();
+
+    Napi::Value tags = options.Get("tags");
+    if (tags.IsString()) {
+      message.set_tags(tags.ToString());
+    }
+
+    Napi::Value keys = options.Get("keys");
+    if (keys.IsString()) {
+      message.set_keys(keys.ToString());
+    }
+  }
+
+  auto* send_callback =
+      new ProducerSendCallback(info.Env(), info[3].As<Napi::Function>());
+  producer_.send(message, send_callback);
+
+  return info.Env().Undefined();
+}
+
+}  // namespace __node_rocketmq__

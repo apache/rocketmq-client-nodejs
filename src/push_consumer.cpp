@@ -14,381 +14,258 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <map>
 #include "push_consumer.h"
+
+#include <exception>
+#include <future>
+
+#include <napi.h>
+
+#include <ClientRPCHook.h>
+#include <LoggerConfig.h>
+#include <MQMessageListener.h>
+
 #include "consumer_ack.h"
-#include "workers/push_consumer/start_or_shutdown.h"
 
 using namespace std;
 
 namespace __node_rocketmq__ {
 
-struct MessageHandlerParam
-{
-    RocketMQPushConsumer* consumer;
-    ConsumerAckInner* ack;
-    CMessageExt* msg;
-};
-char message_handler_param_keys[5][8] = { "topic", "tags", "keys", "body", "msgId" };
+Napi::Object RocketMQPushConsumer::Init(Napi::Env env, Napi::Object exports) {
+  Napi::Function func = DefineClass(
+      env,
+      "RocketMQPushConsumer",
+      {
+          InstanceMethod<&RocketMQPushConsumer::Start>("start"),
+          InstanceMethod<&RocketMQPushConsumer::Shutdown>("shutdown"),
+          InstanceMethod<&RocketMQPushConsumer::Subscribe>("subscribe"),
+          InstanceMethod<&RocketMQPushConsumer::SetListener>("setListener"),
+          InstanceMethod<&RocketMQPushConsumer::SetSessionCredentials>(
+              "setSessionCredentials"),
+      });
 
-uv_mutex_t _get_msg_ext_column_lock;
+  Napi::FunctionReference* constructor = new Napi::FunctionReference();
+  *constructor = Napi::Persistent(func);
+  env.SetInstanceData<Napi::FunctionReference>(constructor);
 
-map<CPushConsumer*, RocketMQPushConsumer*> _push_consumer_map;
-
-#define NAN_GET_CPUSHCONSUMER() \
-    RocketMQPushConsumer* _v8_consumer = ObjectWrap::Unwrap<RocketMQPushConsumer>(info.Holder()); \
-    CPushConsumer* consumer_ptr = _v8_consumer->GetConsumer();
-
-Nan::Persistent<Function> RocketMQPushConsumer::constructor;
-
-RocketMQPushConsumer::RocketMQPushConsumer(const char* group_id, const char* instance_name) :
-    consumer_ptr(NULL)
-{
-    consumer_ptr = CreatePushConsumer(group_id);
-
-    if(instance_name)
-    {
-        SetPushConsumerInstanceName(consumer_ptr, instance_name);
-    }
-
-    _push_consumer_map[consumer_ptr] = this;
-
-    RegisterMessageCallback(consumer_ptr, RocketMQPushConsumer::OnMessage);
+  exports.Set("PushConsumer", func);
+  return exports;
 }
 
-RocketMQPushConsumer::~RocketMQPushConsumer()
-{
-    try
-    {
-        ShutdownPushConsumer(consumer_ptr);
-        auto it = _push_consumer_map.find(consumer_ptr);
-        if(it != _push_consumer_map.end())
-        {
-            _push_consumer_map.erase(consumer_ptr);
-        }
-    }
-    catch(...)
-    {
-        //
-    }
+RocketMQPushConsumer::RocketMQPushConsumer(const Napi::CallbackInfo& info)
+    : Napi::ObjectWrap<RocketMQPushConsumer>(info), consumer_("") {
+  const Napi::Value group_name = info[0];
+  if (group_name.IsString()) {
+    consumer_.set_group_name(group_name.ToString());
+  }
 
-    DestroyPushConsumer(consumer_ptr);
-    consumer_ptr = NULL;
-}
+  const Napi::Value instance_name = info[1];
+  if (instance_name.IsString()) {
+    consumer_.set_instance_name(instance_name.ToString());
+  }
 
-void RocketMQPushConsumer::SetOptions(Local<Object> options)
-{
-    // set name server
-    Local<Value> _name_server_v = Nan::Get(options, Nan::New<String>("nameServer").ToLocalChecked()).ToLocalChecked();
-    if(_name_server_v->IsString())
-    {
-        Nan::Utf8String namesrv(_name_server_v);
-        SetPushConsumerNameServerAddress(consumer_ptr, *namesrv);
-    }
-
-    // set thread count
-    Local<Value> _thread_count_v = Nan::Get(options, Nan::New<String>("threadCount").ToLocalChecked()).ToLocalChecked();
-    if(_thread_count_v->IsNumber())
-    {
-        int thread_count = Nan::To<int32_t>(_thread_count_v).FromJust();
-        if(thread_count > 0)
-        {
-            SetPushConsumerThreadCount(consumer_ptr, thread_count);
-        }
-    }
-
-    // set message batch max size
-    Local<Value> _max_batch_size_v = Nan::Get(options, Nan::New<String>("maxBatchSize").ToLocalChecked()).ToLocalChecked();
-    if(_max_batch_size_v->IsNumber())
-    {
-        int max_batch_size = Nan::To<int32_t>(_max_batch_size_v).FromJust();
-        if(max_batch_size > 0)
-        {
-            SetPushConsumerMessageBatchMaxSize(consumer_ptr, max_batch_size);
-        }
-    }
-
-    // set log num & single log size
-    int file_num = 3;
-    int64 file_size = 104857600;
-    Local<Value> _log_file_num_v = Nan::Get(options, Nan::New<String>("logFileNum").ToLocalChecked()).ToLocalChecked();
-    Local<Value> _log_file_size_v = Nan::Get(options, Nan::New<String>("logFileSize").ToLocalChecked()).ToLocalChecked();
-    if(_log_file_num_v->IsNumber())
-    {
-        file_num = _log_file_num_v->Int32Value();
-    }
-    if(_log_file_size_v->IsNumber())
-    {
-        file_size = _log_file_size_v->Int32Value();
-    }
-    SetPushConsumerLogFileNumAndSize(consumer_ptr, file_num, file_size);
-
-    // set log level
-    Local<Value> _log_level_v = Nan::Get(options, Nan::New<String>("logLevel").ToLocalChecked()).ToLocalChecked();
-    if(_log_level_v->IsNumber())
-    {
-        int level = _log_level_v->Int32Value();
-        SetPushConsumerLogLevel(consumer_ptr, (CLogLevel) level);
-    }
-}
-
-NAN_MODULE_INIT(RocketMQPushConsumer::Init)
-{
-    uv_mutex_init(&_get_msg_ext_column_lock);
-    Local<FunctionTemplate> tpl = Nan::New<FunctionTemplate>(New);
-    tpl->SetClassName(Nan::New("RocketMQPushConsumer").ToLocalChecked());
-    tpl->InstanceTemplate()->SetInternalFieldCount(1);
-
-    Nan::SetPrototypeMethod(tpl, "start", Start);
-    Nan::SetPrototypeMethod(tpl, "shutdown", Shutdown);
-    Nan::SetPrototypeMethod(tpl, "subscribe", Subscribe);
-    Nan::SetPrototypeMethod(tpl, "setListener", SetListener);
-    Nan::SetPrototypeMethod(tpl, "setSessionCredentials", SetSessionCredentials);
-
-    constructor.Reset(tpl->GetFunction());
-    Nan::Set(target, Nan::New("PushConsumer").ToLocalChecked(), tpl->GetFunction());
-}
-
-NAN_METHOD(RocketMQPushConsumer::New)
-{
-    Isolate* isolate = info.GetIsolate();
-    Local<Context> context = Context::New(isolate);
-
-    if(!info.IsConstructCall())
-    {
-        const int argc = 3;
-        Local<Value> argv[argc] = { info[0], info[1], info[2] };
-        Local<Function> _constructor = Nan::New<v8::Function>(constructor);
-        info.GetReturnValue().Set(_constructor->NewInstance(context, argc, argv).ToLocalChecked());
-        return;
-    }
-
-    Nan::Utf8String v8_group_id(info[0]);
-    Nan::Utf8String v8_instance_name(info[1]);
-    string group_id = *v8_group_id;
-    string instance_name = *v8_instance_name;
-    Local<Object> options = Nan::To<Object>(info[2]).ToLocalChecked();
-    RocketMQPushConsumer* consumer = new RocketMQPushConsumer(group_id.c_str(), info[1]->IsNull() ? NULL : instance_name.c_str());
-
-    consumer->Wrap(info.This());
-
+  const Napi::Value options = info[2];
+  if (options.IsObject()) {
     // try to set options
-    try
-    {
-        consumer->SetOptions(options);
-    }
-    catch(const runtime_error e)
-    {
-        Nan::ThrowError(e.what());
-        return;
-    }
-    catch(const std::exception& e)
-    {
-        Nan::ThrowError(e.what());
-        return;
-    }
-
-    info.GetReturnValue().Set(info.This());
+    SetOptions(options.ToObject());
+  }
 }
 
-NAN_METHOD(RocketMQPushConsumer::Start)
-{
-    NAN_GET_CPUSHCONSUMER();
-
-    Nan::Callback* callback = (info[0]->IsFunction()) ?
-        new Nan::Callback(Nan::To<Function>(info[0]).ToLocalChecked()) :
-        NULL;
-
-    Nan::AsyncQueueWorker(new PushConsumerStartOrShutdownWorker(callback, consumer_ptr, PushConsumerWorkerType::START_PUSH_CONSUMER));
+RocketMQPushConsumer::~RocketMQPushConsumer() {
+  consumer_.shutdown();
 }
 
-NAN_METHOD(RocketMQPushConsumer::Shutdown)
-{
-    NAN_GET_CPUSHCONSUMER();
+void RocketMQPushConsumer::SetOptions(const Napi::Object& options) {
+  // set name server
+  Napi::Value name_server = options.Get("nameServer");
+  if (name_server.IsString()) {
+    consumer_.set_namesrv_addr(name_server.ToString());
+  }
 
-    Nan::Callback* callback = (info[0]->IsFunction()) ?
-        new Nan::Callback(Nan::To<Function>(info[0]).ToLocalChecked()) :
-        NULL;
+  // set group name
+  Napi::Value group_name = options.Get("groupName");
+  if (group_name.IsString()) {
+    consumer_.set_group_name(group_name.ToString());
+  }
 
-    Nan::AsyncQueueWorker(new PushConsumerStartOrShutdownWorker(callback, consumer_ptr, PushConsumerWorkerType::SHUTDOWN_PUSH_CONSUMER));
+  // set thread count
+  Napi::Value thread_count = options.Get("threadCount");
+  if (thread_count.IsNumber()) {
+    consumer_.set_consume_thread_nums(thread_count.ToNumber());
+  }
+
+  // set message batch max size
+  Napi::Value max_batch_size = options.Get("maxBatchSize");
+  if (max_batch_size.IsNumber()) {
+    consumer_.set_consume_message_batch_max_size(max_batch_size.ToNumber());
+  }
+
+  // set log level
+  Napi::Value log_level = options.Get("logLevel");
+  if (log_level.IsNumber()) {
+    int32_t level = log_level.ToNumber();
+    if (level >= 0 && level < rocketmq::LogLevel::LOG_LEVEL_LEVEL_NUM) {
+      rocketmq::GetDefaultLoggerConfig().set_level(
+          static_cast<rocketmq::LogLevel>(level));
+    }
+  }
+
+  // set log directory
+  Napi::Value log_dir = options.Get("logDir");
+  if (log_dir.IsString()) {
+    rocketmq::GetDefaultLoggerConfig().set_path(log_dir.ToString());
+  }
+
+  // set log file size
+  Napi::Value log_file_size = options.Get("logFileSize");
+  if (log_file_size.IsNumber()) {
+    rocketmq::GetDefaultLoggerConfig().set_file_count(log_file_size.ToNumber());
+  }
+
+  // set log file num
+  Napi::Value log_file_num = options.Get("logFileNum");
+  if (log_file_num.IsNumber()) {
+    rocketmq::GetDefaultLoggerConfig().set_file_count(log_file_num.ToNumber());
+  }
 }
 
-NAN_METHOD(RocketMQPushConsumer::Subscribe)
-{
-    NAN_GET_CPUSHCONSUMER();
+Napi::Value RocketMQPushConsumer::SetSessionCredentials(
+    const Napi::CallbackInfo& info) {
+  Napi::String access_key = info[0].As<Napi::String>();
+  Napi::String secret_key = info[1].As<Napi::String>();
+  Napi::String ons_channel = info[2].As<Napi::String>();
 
-    Nan::Utf8String v8_topic(info[0]);
-    Nan::Utf8String v8_expression(info[1]);
-    string topic = *v8_topic;
-    string expression = *v8_expression;
+  auto rpc_hook = std::make_shared<rocketmq::ClientRPCHook>(
+      rocketmq::SessionCredentials(access_key, secret_key, ons_channel));
+  consumer_.setRPCHook(rpc_hook);
 
-    int ret;
-    try
-    {
-        ret = ::Subscribe(consumer_ptr, topic.c_str(), expression.c_str());
-    }
-    catch(const runtime_error e)
-    {
-        Nan::ThrowError(e.what());
-        return;
-    }
-    catch(const std::exception& e)
-    {
-        Nan::ThrowError(e.what());
-        return;
-    }
-
-    info.GetReturnValue().Set(ret);
+  return info.Env().Undefined();
 }
 
-NAN_METHOD(RocketMQPushConsumer::SetListener)
-{
-    RocketMQPushConsumer* consumer = ObjectWrap::Unwrap<RocketMQPushConsumer>(info.Holder());
-    if(!consumer->listener_func.IsEmpty())
-    {
-        consumer->listener_func.Reset();
-    }
+class ConsumerStartWorker : public Napi::AsyncWorker {
+ public:
+  ConsumerStartWorker(const Napi::Function& callback,
+                      const rocketmq::DefaultMQPushConsumer& consumer)
+      : Napi::AsyncWorker(callback), consumer_(consumer) {}
 
-    consumer->listener_func.Reset(Nan::To<Function>(info[0]).ToLocalChecked());
+  void Execute() override { consumer_.start(); }
+
+ private:
+  rocketmq::DefaultMQPushConsumer consumer_;
+};
+
+Napi::Value RocketMQPushConsumer::Start(const Napi::CallbackInfo& info) {
+  Napi::Function callback = info[0].As<Napi::Function>();
+  auto* worker = new ConsumerStartWorker(callback, consumer_);
+  worker->Queue();
+  return info.Env().Undefined();
 }
 
-NAN_METHOD(RocketMQPushConsumer::SetSessionCredentials)
-{
-    NAN_GET_CPUSHCONSUMER();
+class ConsumerShutdownWorker : public Napi::AsyncWorker {
+ public:
+  ConsumerShutdownWorker(const Napi::Function& callback,
+                         const rocketmq::DefaultMQPushConsumer& consumer)
+      : Napi::AsyncWorker(callback), consumer_(consumer) {}
 
-    Nan::Utf8String access_key(info[0]);
-    Nan::Utf8String secret_key(info[1]);
-    Nan::Utf8String ons_channel(info[2]);
+  void Execute() override { consumer_.shutdown(); }
 
-    int ret;
-    try
-    {
-        ret = SetPushConsumerSessionCredentials(consumer_ptr, *access_key, *secret_key, *ons_channel);
-    }
-    catch(const runtime_error e)
-    {
-        Nan::ThrowError(e.what());
-        return;
-    }
-    catch(const std::exception& e)
-    {
-        Nan::ThrowError(e.what());
-        return;
-    }
+ private:
+  rocketmq::DefaultMQPushConsumer consumer_;
+};
 
-    info.GetReturnValue().Set(ret);
+Napi::Value RocketMQPushConsumer::Shutdown(const Napi::CallbackInfo& info) {
+  Napi::Function callback = info[0].As<Napi::Function>();
+  auto* worker = new ConsumerShutdownWorker(callback, consumer_);
+  worker->Queue();
+  return info.Env().Undefined();
 }
 
-string RocketMQPushConsumer::GetMessageColumn(char* name, CMessageExt* msg)
-{
-    const char* orig = NULL;
+Napi::Value RocketMQPushConsumer::Subscribe(const Napi::CallbackInfo& info) {
+  Napi::String topic = info[0].As<Napi::String>();
+  Napi::String expression = info[1].As<Napi::String>();
 
-    uv_mutex_lock(&_get_msg_ext_column_lock);
-    switch(name[0])
-    {
-    // topic / tags
-    case 't':
-        orig = name[1] == 'o' ? GetMessageTopic(msg) : GetMessageTags(msg);
-        break;
+  consumer_.subscribe(topic, expression);
 
-    // keys
-    case 'k':
-        orig = GetMessageKeys(msg);
-        break;
+  return info.Env().Undefined();
+}
 
-    // body
-    case 'b':
-        orig = GetMessageBody(msg);
-        break;
+struct MessageAndPromise {
+  rocketmq::MQMessageExt message;
+  std::promise<bool> promise;
+};
 
-    // msgId
-    case 'm':
-        orig = GetMessageId(msg);
-        break;
+void CallConsumerMessageJsListener(Napi::Env env,
+                                   Napi::Function listener,
+                                   std::nullptr_t*,
+                                   MessageAndPromise* data) {
+  if (env != nullptr) {
+    if (listener != nullptr) {
+      Napi::Object message = Napi::Object::New(env);
+      message.Set("topic", data->message.topic());
+      message.Set("tags", data->message.tags());
+      message.Set("keys", data->message.keys());
+      message.Set("body", data->message.body());
+      message.Set("msgId", data->message.msg_id());
 
-    default:
-        orig = NULL;
-        break;
+      Napi::Object ack = ConsumerAck::NewInstance(env);
+      ConsumerAck* consumer_ack = Napi::ObjectWrap<ConsumerAck>::Unwrap(ack);
+      consumer_ack->SetPromise(std::move(data->promise));
+
+      try {
+        listener.Call(Napi::Object::New(listener.Env()), {message, ack});
+      } catch (const Napi::Error& e) {
+        try {
+          consumer_ack->Done(std::current_exception());
+        } catch (const std::future_error&) {
+          // ignore
+        }
+      }
+      return;
     }
-
-    uv_mutex_unlock(&_get_msg_ext_column_lock);
-
-    if(!orig) return "";
-    return orig;
+  }
+  data->promise.set_value(false);
 }
 
-void close_async_done(uv_handle_t* handle)
-{
-    free(handle);
-}
+class ConsumerMessageListener : public rocketmq::MessageListenerConcurrently {
+ public:
+  ConsumerMessageListener(Napi::Env& env, Napi::Function&& callback)
+      : listener_(
+            Listener::New(env, callback, "RocketMQ Message Listener", 0, 1)) {}
 
-void RocketMQPushConsumer::HandleMessageInEventLoop(uv_async_t* async)
-{
-    Nan::HandleScope scope;
+  ~ConsumerMessageListener() { listener_.Release(); }
 
-    Isolate* isolate = Isolate::GetCurrent();
-    Local<Context> context = isolate->GetCurrentContext();
-
-    MessageHandlerParam* param = (MessageHandlerParam*)(async->data);
-    RocketMQPushConsumer* consumer = param->consumer;
-    ConsumerAckInner* ack_inner = param->ack;
-    CMessageExt* msg = param->msg;
-
-    // create the JavaScript ack object and then set inner ack object
-    Local<Function> cons = Nan::New<Function>(ConsumerAck::GetConstructor());
-    Local<Object> ack_obj = cons->NewInstance(context, 0, 0).ToLocalChecked();
-    ConsumerAck* ack = ObjectWrap::Unwrap<ConsumerAck>(ack_obj);
-    ack->SetInner(ack_inner);
-
-    // TODO: const char *GetMessageProperty(CMessageExt *msgExt, const char *key);
-    Local<Object> result = Nan::New<Object>();
-    for(int i = 0; i < 5; i++)
-    {
-        Nan::Set(
-            result,
-            Nan::New(message_handler_param_keys[i]).ToLocalChecked(),
-            Nan::New(RocketMQPushConsumer::GetMessageColumn(message_handler_param_keys[i], msg)).ToLocalChecked());
+  rocketmq::ConsumeStatus consumeMessage(
+      std::vector<rocketmq::MQMessageExt>& msgs) override {
+    for (auto& msg : msgs) {
+      MessageAndPromise data{msg, std::promise<bool>()};
+      auto future = data.promise.get_future();
+      listener_.BlockingCall(&data);
+      try {
+        if (!future.get()) {
+          return rocketmq::ConsumeStatus::RECONSUME_LATER;
+        }
+      } catch (const std::exception& e) {
+        return rocketmq::ConsumeStatus::RECONSUME_LATER;
+      }
     }
+    return rocketmq::ConsumeStatus::CONSUME_SUCCESS;
+  };
 
-    Local<Value> argv[2] = {
-        result,
-        ack_obj
-    };
-    Nan::Callback* callback = consumer->GetListenerFunction();
-    callback->Call(2, argv);
+ private:
+  using Listener =
+      Napi::TypedThreadSafeFunction<std::nullptr_t,
+                                    MessageAndPromise,
+                                    &CallConsumerMessageJsListener>;
 
-    uv_close((uv_handle_t*)async, close_async_done);
+  Listener listener_;
+};
+
+Napi::Value RocketMQPushConsumer::SetListener(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  listener_.reset(
+      new ConsumerMessageListener(env, info[0].As<Napi::Function>()));
+  consumer_.registerMessageListener(listener_.get());
+  return env.Undefined();
 }
 
-int RocketMQPushConsumer::OnMessage(CPushConsumer* consumer_ptr, CMessageExt* msg_ext)
-{
-    RocketMQPushConsumer* consumer = _push_consumer_map[consumer_ptr];
-    if (!consumer)
-    {
-        // TODO: error handle
-        return CConsumeStatus::E_RECONSUME_LATER;
-    }
-
-    ConsumerAckInner ack_inner;
-
-    // create async parameter
-    MessageHandlerParam param;
-    param.consumer = consumer;
-    param.ack = &ack_inner;
-    param.msg = msg_ext;
-
-    // create a new async handler and bind with `RocketMQPushConsumer::HandleMessageInEventLoop`
-    uv_async_t* async = (uv_async_t*)malloc(sizeof(uv_async_t));
-    uv_async_init(uv_default_loop(), async, RocketMQPushConsumer::HandleMessageInEventLoop);
-    async->data = (void*)(&param);
-
-    // send async handler
-    uv_async_send(async);
-
-    // wait for result
-    CConsumeStatus status = ack_inner.WaitResult();
-
-    return status;
-}
-
-}
+}  // namespace __node_rocketmq__
