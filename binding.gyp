@@ -19,6 +19,7 @@
       "target_name": "rocketmq",
       "sources": [
         "src/rocketmq.cpp",
+        "src/name_server.cpp",
         "src/producer.cpp",
         "src/push_consumer.cpp",
         "src/consumer_ack.cpp",
@@ -39,7 +40,8 @@
         }],
         ["OS==\"win\"", {
           "libraries": [
-            "<(module_root_dir)/deps/lib/rocketmq-client-cpp.lib"
+            "<(module_root_dir)/deps/lib/rocketmq-client-cpp.lib",
+            "ws2_32.lib"
           ],
           "copies": [
             {

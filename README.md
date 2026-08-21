@@ -177,6 +177,7 @@ new PushConsumer(groupId[, instanceName][, options]);
   - `nameServer`: the name server of RocketMQ;
   - `threadCount`: the thread number of underlying C++ logic;
   - `maxBatchSize`: message max batch size;
+  - `messageModel`: the consume mode, either `"CLUSTERING"` (default) or `"BROADCASTING"`;
   - `logFileNum`: C++ core logic log file number, default to 3 and log file path is `$HOME/logs/rocketmq-cpp`;
   - `logFileSize`: size of each C++ core logic log file with unit (B);
   - `logLevel`: C++ core logic log level in `"fatal"`, `"error"`, `"warn"`, `"info"`, `"debug"`, `"trace"` and `"num"`.
@@ -187,8 +188,12 @@ e.g.
 const { PushConsumer } = require("apache-rocketmq");
 const consumer = new PushConsumer("GROUP_ID", "INSTANCE_NAME", {
     nameServer: "127.0.0.1:9876",
-    threadCount: 3
+    threadCount: 3,
+    messageModel: "BROADCASTING"
 });
+
+// Required when connecting to Alibaba Cloud RocketMQ.
+consumer.setSessionCredentials("ACCESS_KEY", "SECRET_KEY", "ALIYUN");
 ```
 
 #### start

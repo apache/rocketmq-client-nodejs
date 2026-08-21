@@ -16,6 +16,7 @@
  */
 #include <map>
 #include "push_consumer.h"
+#include "name_server.h"
 #include "consumer_ack.h"
 #include "workers/push_consumer/start_or_shutdown.h"
 
@@ -83,7 +84,8 @@ void RocketMQPushConsumer::SetOptions(Local<Object> options)
     if(_name_server_v->IsString())
     {
         Nan::Utf8String namesrv(_name_server_v);
-        SetPushConsumerNameServerAddress(consumer_ptr, *namesrv);
+        string resolved_namesrv = ResolveNameServerAddress(*namesrv);
+        SetPushConsumerNameServerAddress(consumer_ptr, resolved_namesrv.c_str());
     }
 
     // set thread count
@@ -106,6 +108,18 @@ void RocketMQPushConsumer::SetOptions(Local<Object> options)
         {
             SetPushConsumerMessageBatchMaxSize(consumer_ptr, max_batch_size);
         }
+    }
+
+    // set message model
+    Local<Value> _message_model_v = Nan::Get(options, Nan::New<String>("messageModel").ToLocalChecked()).ToLocalChecked();
+    if(_message_model_v->IsNumber())
+    {
+        int message_model = Nan::To<int32_t>(_message_model_v).FromJust();
+        if(message_model != BROADCASTING && message_model != CLUSTERING)
+        {
+            throw runtime_error("messageModel must be BROADCASTING or CLUSTERING");
+        }
+        SetPushConsumerMessageModel(consumer_ptr, (CMessageModel) message_model);
     }
 
     // set log num & single log size
