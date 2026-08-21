@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 #include "producer.h"
+#include "name_server.h"
 #include "workers/producer/send_message.h"
 #include "workers/producer/start_or_shutdown.h"
 
@@ -60,7 +61,8 @@ void RocketMQProducer::SetOptions(Local<Object> options)
     if(_name_server_v->IsString())
     {
         Nan::Utf8String namesrv(_name_server_v);
-        SetProducerNameServerAddress(producer_ptr, *namesrv);
+        string resolved_namesrv = ResolveNameServerAddress(*namesrv);
+        SetProducerNameServerAddress(producer_ptr, resolved_namesrv.c_str());
     }
 
     // set group name

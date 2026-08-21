@@ -5,7 +5,9 @@
   "description": "RocketMQ binding for Node.js",
   "main": "index.js",
   "scripts": {
-    "test": "npm run lint && echo 'temp example test' && node example/producer.js && node example/push_consumer.js",
+    "test": "npm run lint && npm run test:unit && echo 'temp example test' && node example/producer.js && node example/push_consumer.js",
+    "test:unit": "node test/push_consumer.test.js",
+    "test:broadcast": "node test/broadcast_e2e.js",
     "lint": "eslint .",
     "install": "node ./script/download_lib.js && node-gyp rebuild"
   },
